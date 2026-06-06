@@ -1,5 +1,15 @@
-环境在package.json里
-参考的opencode的结构框架也是Effect
-自己封装的SDK没用Effect的ai包
-完成度是勉强能跑
+项目内容如题就是类似opencode的编程助手可以接模型APIKey
+
+参考opencode的结构 框架也是Effect
+
+环境在package.json里 关键是npm和bun两个包管理器剩下的都可以用这两下载
+下载完在项目根目录跑bun start -- chat
+能进去可以输/help看操作
+主agent跟opencode一样是chat和builder两个模式
+chat只读 builder能写 目前仅限当前目录下
+要用什么模型写在try.json里面 目前封装了openai和athropic的SDK 能兼容的都能用
+apikey和url建议写在auth.json里面 Scripts文件夹下面有快速生成模板的脚本
+
+因为单纯是自己搞着玩的结构编码都不严肃 ai写了大半
+完成度是勉强能跑 bug太多请容忍
 在力竭之前会尽力更新
