@@ -53,12 +53,8 @@ toolCommand
 toolCommand
   .command("enable <name>")
   .description("Enable a tool")
-  .action(async (toolName: string) => {
-    await AppRuntime.runPromise(
-      Effect.gen(function* () {
-        yield* setToolEnabled(toolName, true)
-      })
-    )
+  .action(async (name) => {
+    await AppRuntime.runPromise(setToolEnabled(name, true))
     process.exit(0)
   })
 
@@ -66,11 +62,7 @@ toolCommand
 toolCommand
   .command("disable <name>")
   .description("Disable a tool")
-  .action(async (toolName: string) => {
-    await AppRuntime.runPromise(
-      Effect.gen(function* () {
-        yield* setToolEnabled(toolName, false)
-      })
-    )
+  .action(async (name) => {
+    await AppRuntime.runPromise(setToolEnabled(name, false))
     process.exit(0)
   })
