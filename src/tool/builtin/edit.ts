@@ -1,7 +1,7 @@
 // src/tool/builtin/edit.ts
 import { Effect, Schema } from "effect"
 import { readFile, writeFile } from "fs/promises"
-import { resolve } from "path"
+import { resolve, isAbsolute } from "path"
 import type { ToolDefinition } from "../types.js"
 import { EditInput, ToolExecutionError } from "../types.js"
 
@@ -13,7 +13,7 @@ const EditInputSchema = Schema.Struct({
 
 export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
   name: "edit_file",
-  description: "Edit a file by replacing occurrences of oldString with newString.",
+  description: "Edit a file by replacing occurrences of oldString with newString. Supports absolute paths and relative paths.",
   category: "file",
   permission: "write",
   inputSchema: EditInputSchema,
@@ -21,7 +21,9 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
   
   execute: (input, context) =>
     Effect.gen(function* () {
-      const fullPath = resolve(context.workspaceRoot, input.filePath)
+      const fullPath = isAbsolute(input.filePath)
+        ? input.filePath
+        : resolve(context.workspaceRoot, input.filePath)
       
       const content = yield* Effect.tryPromise({
         try: () => readFile(fullPath, "utf-8"),

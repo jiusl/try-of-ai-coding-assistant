@@ -1,7 +1,7 @@
 // src/tool/builtin/write.ts
 import { Effect, Schema } from "effect"
 import { writeFile, mkdir } from "fs/promises"
-import { resolve, dirname } from "path"
+import { resolve, dirname, isAbsolute } from "path"
 import type { ToolDefinition } from "../types.js"
 import { WriteInput, ToolExecutionError } from "../types.js"
 
@@ -12,7 +12,7 @@ const WriteInputSchema = Schema.Struct({
 
 export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
   name: "write_file",
-  description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does.",
+  description: "Write content to a file. Supports absolute paths and relative paths. Creates parent directories if needed.",
   category: "file",
   permission: "write",
   inputSchema: WriteInputSchema,
@@ -20,7 +20,9 @@ export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
   
   execute: (input, context) =>
     Effect.gen(function* () {
-      const fullPath = resolve(context.workspaceRoot, input.filePath)
+      const fullPath = isAbsolute(input.filePath)
+        ? input.filePath
+        : resolve(context.workspaceRoot, input.filePath)
       
       // 确保目录存在
       yield* Effect.tryPromise({

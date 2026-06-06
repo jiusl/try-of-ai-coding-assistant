@@ -1,7 +1,7 @@
 // src/tool/builtin/read.ts
 import { Effect, Schema } from "effect"
 import { readFile } from "fs/promises"
-import { resolve } from "path"
+import { resolve, isAbsolute } from "path"
 import type { ToolDefinition } from "../types.js"
 import { ReadInput, ToolExecutionError } from "../types.js"
 
@@ -13,7 +13,7 @@ const ReadInputSchema = Schema.Struct({
 
 export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
   name: "read_file",
-  description: "Read the contents of a file. Returns the file content as a string.",
+  description: "Read the contents of a file. Supports absolute paths (e.g. D:/projects/main.ts) and relative paths from workspace.",
   category: "file",
   permission: "read",
   inputSchema: ReadInputSchema,
@@ -21,7 +21,9 @@ export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
   
   execute: (input, context) =>
     Effect.gen(function* () {
-      const fullPath = resolve(context.workspaceRoot, input.filePath)
+      const fullPath = isAbsolute(input.filePath)
+        ? input.filePath
+        : resolve(context.workspaceRoot, input.filePath)
       
       const content = yield* Effect.tryPromise({
         try: () => readFile(fullPath, "utf-8"),

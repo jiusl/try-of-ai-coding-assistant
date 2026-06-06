@@ -1,7 +1,7 @@
 // src/tool/builtin/glob.ts
 import { Effect, Schema } from "effect"
 import { readdir } from "fs/promises"
-import { resolve, relative } from "path"
+import { resolve, relative, isAbsolute } from "path"
 import { isMatch } from "micromatch"
 import type { ToolDefinition } from "../types.js"
 import { GlobInput, ToolExecutionError } from "../types.js"
@@ -43,7 +43,7 @@ const glob = async (
 
 export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
   name: "glob",
-  description: "Find files matching a glob pattern (e.g., '**/*.ts', 'src/**/*.css').",
+  description: "Find files matching a glob pattern (e.g., '**/*.ts'). Supports absolute paths for cwd.",
   category: "search",
   permission: "read",
   inputSchema: GlobInputSchema,
@@ -51,11 +51,13 @@ export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
   
   execute: (input, context) =>
     Effect.gen(function* () {
-      const cwd = input.cwd ?? context.workspaceRoot
+      const resolvedCwd = input.cwd
+        ? isAbsolute(input.cwd) ? input.cwd : resolve(context.workspaceRoot, input.cwd)
+        : context.workspaceRoot
       
       const files = yield* Effect.tryPromise({
         try: () => glob(input.pattern, {
-          cwd,
+          cwd: resolvedCwd,
           ...(input.ignore ? { ignore: input.ignore } : {}),
           absolute: false,
           nodir: true

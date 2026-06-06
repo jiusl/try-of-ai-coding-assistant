@@ -3,12 +3,18 @@
 参考opencode的结构 框架也是Effect
 
 环境在package.json里 关键是npm和bun两个包管理器剩下的都可以用这两下载
+
 下载完在项目根目录跑bun start -- chat
+
 能进去可以输/help看操作
+
 主agent跟opencode一样是chat和builder两个模式
-chat只读 builder能写 目前仅限当前目录下
+
+chat只读 builder能写 目前仅限当前目录下 要读写目录外文件需提供绝对路径
+
 要用什么模型写在try.json里面 目前封装了openai和athropic的SDK 能兼容的都能用
-apikey和url建议写在auth.json里面 Scripts文件夹下面有快速生成模板的脚本
+
+apikey和url建议写在auth.json里面放在根目录下 给了一个auth.example.json 重命名一下就能用
 
 因为单纯是自己搞着玩的结构编码都不严肃 ai写了大半
 完成度是勉强能跑 bug太多请容忍

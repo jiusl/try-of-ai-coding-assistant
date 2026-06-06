@@ -1,7 +1,7 @@
 // src/tool/builtin/grep.ts
 import { Effect, Schema } from "effect"
 import { readdir, readFile } from "fs/promises"
-import { resolve, relative } from "path"
+import { resolve, relative, isAbsolute } from "path"
 import { isMatch } from "micromatch"
 import type { ToolDefinition } from "../types.js"
 import { GrepInput, ToolExecutionError } from "../types.js"
@@ -44,7 +44,7 @@ const glob = async (
 
 export const GrepTool: ToolDefinition<typeof GrepInput.Type, Array<{ file: string; line: number; content: string }>> = {
   name: "grep",
-  description: "Search for a pattern in files (like grep command). Returns matching lines with file and line numbers.",
+  description: "Search for a pattern in files (like grep). Pass an absolute directory path to search anywhere; or a glob pattern relative to workspace.",
   category: "search",
   permission: "read",
   inputSchema: GrepInputSchema,
@@ -52,8 +52,10 @@ export const GrepTool: ToolDefinition<typeof GrepInput.Type, Array<{ file: strin
   
   execute: (input, context) =>
     Effect.gen(function* () {
-      const searchPath = input.path ?? "**/*"
-      const cwd = context.workspaceRoot
+      // 支持绝对路径：如果 path 是绝对路径，将其作为搜索根目录
+      const isAbsPath = input.path && isAbsolute(input.path)
+      const searchPath = isAbsPath ? "**/*" : (input.path ?? "**/*")
+      const cwd = isAbsPath ? input.path! : context.workspaceRoot
       
       const files = yield* Effect.tryPromise({
         try: () => glob(searchPath, { cwd, absolute: true }),

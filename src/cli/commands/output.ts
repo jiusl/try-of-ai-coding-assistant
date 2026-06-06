@@ -1,8 +1,8 @@
 // src/cli/output.ts
 import chalk from "chalk"
 import { Stream } from "effect"
-import type { ExecutionState } from "../agent/types.js"
-import type { ToolCall, ToolResult } from "../tool/types.js"
+import type { ExecutionState } from "../../agent/types.js"
+import type { ToolCall, ToolResult } from "../../tool/types.js"
 
 // ====================================================
 // 颜色主题
