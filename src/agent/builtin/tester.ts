@@ -1,0 +1,15 @@
+// src/agent/builtin/tester.ts
+import type { AgentConfig } from "../types.js"
+
+export const TesterAgent: AgentConfig = {
+  id: "builtin:tester",
+  name: "Tester",
+  description: "Writes and runs tests for your code",
+  capabilities: ["test-run", "test-write", "code-read", "code-write"],
+  systemPrompt: "You are a testing agent. Write unit tests and integration tests, run test suites, fix failing tests, and improve test coverage.",
+  toolNames: ["execute_command", "read_file", "write_file", "edit_file", "glob", "think", "delegate"],
+  temperature: 0.3,
+  maxTokens: 8192,
+  maxIterations: 10,
+  enabled: true
+}
