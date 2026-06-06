@@ -15,7 +15,8 @@
     "rules": [
       { "pattern": "**/*.md", "allow": ["read", "write"], "requireConfirm": false, "description": "允许读写 Markdown 文件" },
       { "pattern": "**/*.json", "allow": ["read"], "requireConfirm": false, "description": "允许读取 JSON 文件" },
-      { "pattern": "**/.env", "allow": [], "description": "禁止读取环境变量文件" }
+      { "pattern": "**/.env", "allow": [], "description": "禁止读取环境变量文件" },
+      { "pattern": "**/*", "allow": ["read", "glob"], "requireConfirm": false, "description": "允许搜索和读取所有文件" }
     ]
   },
   "systemPrompt": "你是一个智能编程助手。",
