@@ -10,7 +10,7 @@ import { Fs } from "../infra/fs-util.js"
 
 export interface AuthConfig {
   /** 当前默认使用的 provider */
-  defaultProvider?: "openai" | "anthropic" | "deepseek"
+  defaultProvider?: "openai" | "anthropic" | "deepseek" | "ollama"
   /** 各 provider 的认证配置 */
   providers: {
     openai?: {
@@ -23,6 +23,10 @@ export interface AuthConfig {
       baseUrl?: string
     }
     deepseek?: {
+      apiKey: string
+      baseUrl?: string
+    }
+    ollama?: {
       apiKey: string
       baseUrl?: string
     }
@@ -158,6 +162,23 @@ const loadAuthConfig = Effect.gen(function* () {
       ...authConfig.providers.deepseek,
       baseUrl: deepseekBaseUrl,
       apiKey: authConfig.providers.deepseek?.apiKey ?? "",
+    }
+  }
+  
+  // Ollama 环境变量覆盖（默认 baseURL: http://localhost:11434/v1）
+  const ollamaKey = yield* env.get("OLLAMA_API_KEY")
+  const ollamaBaseUrl = yield* env.get("OLLAMA_BASE_URL")
+  if (ollamaKey || ollamaBaseUrl) {
+    authConfig.providers.ollama = {
+      ...authConfig.providers.ollama,
+      apiKey: ollamaKey ?? authConfig.providers.ollama?.apiKey ?? "ollama",
+      baseUrl: ollamaBaseUrl ?? authConfig.providers.ollama?.baseUrl ?? "http://localhost:11434/v1",
+    }
+  } else if (!authConfig.providers.ollama) {
+    // 确保 Ollama 有默认配置
+    authConfig.providers.ollama = {
+      apiKey: "ollama",
+      baseUrl: "http://localhost:11434/v1",
     }
   }
   

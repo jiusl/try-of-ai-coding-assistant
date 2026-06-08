@@ -14,6 +14,7 @@ export const OrchestratorAgent: AgentConfig = {
 - **builtin:builder** — Build, compile, and fix build errors
 - **builtin:reviewer** — Review code for quality, bugs, and best practices
 - **builtin:refactor** — Refactor code for better structure
+- **builtin:researcher** — Look up online documentation, API references, and web research
 - **builtin:chat** — Answer general programming questions
 
 ## Workflow

@@ -6,6 +6,7 @@ import { ReviewerAgent } from "./reviewer.js"
 import { TesterAgent } from "./tester.js"
 import { RefactorAgent } from "./refactor.js"
 import { OrchestratorAgent } from "./orchestrator.js"
+import { ResearcherAgent } from "./researcher.js"
 
 export const BUILTIN_AGENTS: AgentConfig[] = [
   OrchestratorAgent,
@@ -14,7 +15,8 @@ export const BUILTIN_AGENTS: AgentConfig[] = [
   BuilderAgent,
   ReviewerAgent,
   TesterAgent,
-  RefactorAgent
+  RefactorAgent,
+  ResearcherAgent
 ]
 
-export { ChatAgent, CoderAgent, BuilderAgent, ReviewerAgent, TesterAgent, RefactorAgent, OrchestratorAgent }
+export { ChatAgent, CoderAgent, BuilderAgent, ReviewerAgent, TesterAgent, RefactorAgent, OrchestratorAgent, ResearcherAgent }

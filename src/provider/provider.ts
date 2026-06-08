@@ -34,6 +34,9 @@ interface SDKRegistry {
   deepseek: {
     OpenAI: new (config: OpenAIConfig) => OpenAIClient
   } | null
+  ollama: {
+    OpenAI: new (config: OpenAIConfig) => OpenAIClient
+  } | null
 }
 
 interface OpenAIClient {
@@ -112,7 +115,8 @@ interface AnthropicResponse {
 const sdkCache: SDKRegistry = {
   openai: null,
   anthropic: null,
-  deepseek: null
+  deepseek: null,
+  ollama: null
 }
 
 const loadOpenAISDK = () =>
@@ -176,6 +180,27 @@ const loadDeepSeekSDK = () =>
     }
   })
 
+const loadOllamaSDK = () =>
+  Effect.gen(function* () {
+    if (sdkCache.ollama) {
+      return sdkCache.ollama
+    }
+    
+    try {
+      // Ollama 兼容 OpenAI API，复用 openai 包
+      const module = yield* Effect.promise(() => import("openai"))
+      sdkCache.ollama = module as unknown as { OpenAI: new (config: OpenAIConfig) => OpenAIClient }
+      return sdkCache.ollama
+    } catch (error) {
+      return yield* Effect.fail(
+        new SDKNotInstalledErrorClass({
+          provider: "ollama",
+          installCommand: "bun add openai"
+        })
+      )
+    }
+  })
+
 // ====================================================
 // 服务接口定义
 // ====================================================
@@ -213,6 +238,15 @@ const getProviderFromModel = (model?: string): Effect.Effect<ProviderType, Provi
     const openaiModels = ["gpt-", "o1-", "o3-"]
     const anthropicModels = ["claude-"]
     const deepseekModels = ["deepseek-"]
+    // Ollama 常见模型前缀
+    const ollamaModels = [
+      "llama", "qwen", "mistral", "mixtral", "gemma", "phi",
+      "codellama", "yi-", "neural-chat", "solar", "dolphin",
+      "nous-hermes", "wizard", "openchat", "tinyllama", "stablelm",
+      "command-r", "orca", "falcon", "vicuna", "zephyr", "bakllava",
+      "llava", "nomic-", "mxbai-", "all-minilm", "bge-", "e5-",
+      "deepseek-r1", "deepseek-coder"
+    ]
     
     for (const prefix of openaiModels) {
       if (model.includes(prefix)) return "openai"
@@ -221,11 +255,16 @@ const getProviderFromModel = (model?: string): Effect.Effect<ProviderType, Provi
       if (model.includes(prefix)) return "anthropic"
     }
     for (const prefix of deepseekModels) {
+      // 排除 ollama 上的 deepseek-r1 本地版
+      if (model.includes("deepseek-r1") || model.includes("deepseek-coder")) continue
       if (model.includes(prefix)) return "deepseek"
     }
+    for (const prefix of ollamaModels) {
+      if (model.includes(prefix)) return "ollama"
+    }
     
-    // 默认返回 openai
-    return "openai"
+    // 默认返回 ollama（兼容任意本地模型名称）
+    return "ollama"
   }).pipe(
     Effect.mapError(error => new ProviderErrorClass({
       provider: "openai",
@@ -473,6 +512,71 @@ export const ProviderLive = Layer.effect(
         return result as unknown as GenerateResponse
       })
     
+    // Ollama 非流式调用（兼容 OpenAI API）
+    const callOllama = (
+      messages: Message[],
+      model: string,
+      temperature: number,
+      maxTokens: number,
+      tools?: ToolDefinition[]
+    ) =>
+      Effect.gen(function* () {
+        const sdk = yield* loadOllamaSDK()
+        const apiKey = yield* getApiKey("ollama")
+        const baseUrl = yield* getBaseUrl("ollama")
+        
+        const clientConfig: Record<string, unknown> = {
+          apiKey,
+          baseURL: baseUrl || "http://localhost:11434/v1"
+        }
+        const client = new sdk.OpenAI(clientConfig as unknown as OpenAIConfig)
+        
+        const requestParams: Record<string, unknown> = {
+          model,
+          messages: messages.map(m => {
+            const msg: Record<string, unknown> = { role: m.role, content: m.content }
+            if (m.tool_call_id) msg.tool_call_id = m.tool_call_id
+            if (m.tool_calls) msg.tool_calls = m.tool_calls
+            return msg
+          }),
+          temperature,
+          max_tokens: maxTokens
+        }
+        if (tools) requestParams.tools = tools
+        
+        const response = yield* Effect.tryPromise({
+          try: () => client.chat.completions.create(requestParams as unknown as OpenAIRequest),
+          catch: (error: any) => new ProviderErrorClass({
+            provider: "ollama",
+            statusCode: error.status,
+            message: error.message,
+            cause: error
+          })
+        })
+        
+        const choice = response.choices[0]
+        if (!choice) {
+          return yield* Effect.fail(new ProviderErrorClass({
+            provider: "ollama",
+            message: "API 未返回任何回复内容"
+          }))
+        }
+        
+        const result: Record<string, unknown> = {
+          content: choice.message.content ?? "",
+          model: response.model,
+          usage: {
+            promptTokens: response.usage?.prompt_tokens ?? 0,
+            completionTokens: response.usage?.completion_tokens ?? 0,
+            totalTokens: response.usage?.total_tokens ?? 0
+          }
+        }
+        if (choice.message.tool_calls) {
+          result.tool_calls = choice.message.tool_calls
+        }
+        return result as unknown as GenerateResponse
+      })
+    
     // OpenAI 流式调用
     const streamOpenAI = (
       messages: Message[],
@@ -691,6 +795,82 @@ export const ProviderLive = Layer.effect(
         })
       )
     
+    // Ollama 流式调用（兼容 OpenAI API）
+    const streamOllama = (
+      messages: Message[],
+      model: string,
+      temperature: number,
+      maxTokens: number,
+      tools?: ToolDefinition[]
+    ) =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const sdk = yield* loadOllamaSDK()
+          const apiKey = yield* getApiKey("ollama")
+          const baseUrl = yield* getBaseUrl("ollama")
+          
+          const clientConfig: Record<string, unknown> = {
+            apiKey,
+            baseURL: baseUrl || "http://localhost:11434/v1"
+          }
+          const client = new sdk.OpenAI(clientConfig as unknown as OpenAIConfig)
+          
+          const requestParams: Record<string, unknown> = {
+            model,
+            messages: messages.map(m => {
+              const msg: Record<string, unknown> = { role: m.role, content: m.content }
+              if (m.tool_call_id) msg.tool_call_id = m.tool_call_id
+              if (m.tool_calls) msg.tool_calls = m.tool_calls
+              return msg
+            }),
+            temperature,
+            max_tokens: maxTokens,
+            stream: true as const
+          }
+          if (tools) requestParams.tools = tools
+          
+          const streamResponse = yield* Effect.tryPromise({
+            try: () => client.chat.completions.create(requestParams as unknown as OpenAIRequest),
+            catch: (error: any) => new ProviderErrorClass({
+              provider: "ollama",
+              statusCode: error.status,
+              message: error.message,
+              cause: error
+            })
+          })
+          
+          async function* generateChunks(): AsyncGenerator<StreamChunk> {
+            const iterable = streamResponse as unknown as AsyncIterable<any>
+            for await (const chunk of iterable) {
+              const content = chunk.choices?.[0]?.delta?.content || ""
+              const toolCalls = chunk.choices?.[0]?.delta?.tool_calls
+              
+              if (content) {
+                yield { type: "content", content } as StreamChunk
+              }
+              
+              if (toolCalls && toolCalls.length > 0) {
+                for (const tc of toolCalls) {
+                  yield {
+                    type: "tool_call",
+                    tool_call: tc as ToolCall
+                  } as StreamChunk
+                }
+              }
+            }
+            yield { type: "done" } as StreamChunk
+          }
+          
+          return Stream.fromAsyncIterable(generateChunks(), (error: any) =>
+            new ProviderErrorClass({
+              provider: "ollama",
+              message: error.message ?? String(error),
+              cause: error
+            })
+          )
+        })
+      )
+    
     // 重试策略配置
     const retryPolicy = Schedule.intersect(
       Schedule.exponential(Duration.millis(500), 2.0),
@@ -720,6 +900,9 @@ export const ProviderLive = Layer.effect(
             break
           case "deepseek":
             result = yield* callDeepSeek(messages, targetModel, temperature, maxTokens, tools)
+            break
+          case "ollama":
+            result = yield* callOllama(messages, targetModel, temperature, maxTokens, tools)
             break
           default:
             return yield* Effect.fail(new ProviderErrorClass({
@@ -752,6 +935,8 @@ export const ProviderLive = Layer.effect(
               return streamAnthropic(messages, targetModel, temperature, maxTokens, tools)
             case "deepseek":
               return streamDeepSeek(messages, targetModel, temperature, maxTokens, tools)
+            case "ollama":
+              return streamOllama(messages, targetModel, temperature, maxTokens, tools)
             default:
               return Stream.fail(new ProviderErrorClass({
                 provider: provider as ProviderType,

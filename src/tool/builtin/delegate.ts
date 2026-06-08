@@ -13,7 +13,8 @@ export const DelegateJSONSchema = {
       "Delegate a subtask to another specialized agent. Use this when the current task can be broken " +
       "into sub-tasks that require different expertise. The sub-agent will work independently and return " +
       "its result. Available specialist agents: builtin:coder (code writing/editing), " +
-      "builtin:tester (testing), builtin:reviewer (code review), builtin:refactor (refactoring). " +
+      "builtin:tester (testing), builtin:reviewer (code review), builtin:refactor (refactoring), " +
+      "builtin:researcher (web research & documentation lookup). " +
       "NOTE: Do NOT delegate to builtin:chat (it has no file/command access) or builtin:builder (it is the calling agent). " +
       "Do NOT delegate to an agent already in the call chain (circular delegation will be blocked).",
     parameters: {
@@ -24,7 +25,8 @@ export const DelegateJSONSchema = {
           description:
             "The ID of the agent to delegate to. Choose based on the subtask: " +
             "builtin:coder for writing/editing code, builtin:tester for running/writing tests, " +
-            "builtin:reviewer for code review, builtin:refactor for refactoring. " +
+            "builtin:reviewer for code review, builtin:refactor for refactoring, " +
+            "builtin:researcher for web research & documentation lookup. " +
             "Do NOT use builtin:chat or builtin:builder.",
         },
         task: {

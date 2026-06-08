@@ -1,6 +1,6 @@
 // src/skill/context-injector.ts
 import { Context, Effect, Layer } from "effect"
-import type { SkillDefinition } from "./types.js"
+import type { SkillDefinition, SkillNotFoundError } from "./types.js"
 import type { SkillRegistryService } from "./registry.js"
 import { SkillRegistry } from "./registry.js"
 
@@ -16,7 +16,7 @@ export interface SkillContextInjectorService {
    */
   readonly injectSkills: (
     skillNames: string[],
-  ) => Effect.Effect<string>
+  ) => Effect.Effect<string, SkillNotFoundError>
 
   /**
    * 根据消息内容自动匹配相关 Skill 并注入。

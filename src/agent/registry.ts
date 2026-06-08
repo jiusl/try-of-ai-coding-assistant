@@ -75,7 +75,13 @@ const detectIntent = (message: string): AgentCapability[] => {
   if (lower.includes("test") || lower.includes("测试")) {
     capabilities.push("test-run")
   }
-  if (lower.includes("doc") || lower.includes("文档") || lower.includes("注释")) {
+  if (lower.includes("搜索") || lower.includes("查一下") || lower.includes("查查") ||
+    lower.includes("网上") || lower.includes("网页") || lower.includes("文档") || 
+    lower.includes("api") || lower.includes("官网") || lower.includes("search") ||
+    lower.includes("fetch") || lower.includes("爬取")) {
+    capabilities.push("web-fetch")
+  }
+  if (lower.includes("doc") || lower.includes("注释")) {
     capabilities.push("document")
   }
   if (lower.includes("refactor") || lower.includes("重构") || lower.includes("优化")) {

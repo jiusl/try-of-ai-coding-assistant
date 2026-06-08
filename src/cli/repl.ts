@@ -36,6 +36,7 @@ export class REPL {
   private sessionId: string
   private verbose: boolean
   private currentAgentId: string = "builtin:chat"
+  private currentModel: string | undefined = undefined  // undefined = use config default
   private processing: Promise<void> = Promise.resolve()
   private rl: readline.Interface
 
@@ -147,6 +148,7 @@ export class REPL {
 
     const sessionId = this.sessionId
     const currentAgentId = this.currentAgentId
+    const currentModel = this.currentModel
     const handler = createStreamHandler({ verbose: this.verbose })
 
     const result = await AppRuntime.runPromise(
@@ -156,7 +158,8 @@ export class REPL {
           onChunk: handler.onChunk,
           onToolCall: handler.onToolCall,
           onPhaseChange: handler.onPhaseChange,
-          maxIterations: 10
+          maxIterations: 10,
+          ...(currentModel !== undefined ? { model: currentModel } : {})
         })
       }).pipe(
         Effect.catchAll((error) => {
@@ -198,6 +201,8 @@ export class REPL {
         console.log(chalk.bold("Commands:"))
         console.log("  Tab              - Switch between Chat and Builder agents")
         console.log("  /agent [chat|builder] - Switch to Chat or Builder (no args = toggle)")
+        console.log("  /model <name>    - Switch to a specific model (e.g. /model llama3.2)")
+        console.log("  /model           - Show current model and reset to default")
         console.log("  /exit, /quit     - Exit the chat")
         console.log("  /clear           - Clear the screen")
         console.log("  /verbose         - Toggle verbose mode")
@@ -206,6 +211,10 @@ export class REPL {
         console.log(chalk.bold("Agents:"))
         console.log(`  ${chalk.cyan("[Chat]")}    - Planning agent (read files, search code, plan — read-only)`)
         console.log(`  ${chalk.cyan("[Builder]")} - Full development agent (read, write, edit, execute, delegate)`)
+        console.log()
+        console.log(chalk.bold("Models:"))
+        console.log("  cloud models: gpt-4o, gpt-4o-mini, claude-sonnet-4-20250514, deepseek-chat")
+        console.log("  local models: llama3.2, qwen2.5, mistral, gemma2, phi4, codellama")
         console.log()
         break
 
@@ -224,6 +233,7 @@ export class REPL {
         console.log(chalk.bold("Session Info:"))
         console.log(`  ID: ${chalk.cyan(this.sessionId)}`)
         console.log(`  Agent: ${chalk.cyan(PRIMARY_AGENT_LABELS[this.currentAgentId] ?? this.currentAgentId)}`)
+        console.log(`  Model: ${chalk.cyan(this.currentModel ?? "(default from config)")}`)
         console.log()
         break
 
@@ -256,6 +266,24 @@ export class REPL {
         } else {
           // 无参数 = 切换
           this.cycleAgent()
+        }
+        break
+      }
+
+      case "model": {
+        if (args.length > 0) {
+          const modelName = args.join(" ")
+          this.currentModel = modelName
+          printSystemMessage(`Switched model to: ${chalk.green(modelName)}`, "info")
+        } else {
+          // 无参数 = 显示当前模型或重置为默认
+          if (this.currentModel !== undefined) {
+            const wasModel = this.currentModel
+            this.currentModel = undefined
+            printSystemMessage(`Reset from ${chalk.yellow(wasModel)} to default config model`, "info")
+          } else {
+            printSystemMessage("Using default config model (no override set)", "info")
+          }
         }
         break
       }

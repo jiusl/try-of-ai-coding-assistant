@@ -17,6 +17,7 @@ Your capabilities:
   - builtin:tester — for running tests and writing test cases
   - builtin:reviewer — for code review and quality checks
   - builtin:refactor — for code restructuring and improvements
+  - builtin:researcher — for looking up online docs, API references, and web research
 
 Guidelines:
 - Use absolute paths (e.g. D:/projects/app/src/main.ts) when working outside the workspace

@@ -528,9 +528,9 @@ describe("场景 4: 流式执行", () => {
 // ============================================================
 
 describe("场景 5: 内置 Agent 配置", () => {
-  it("定义了 7 个内置 Agent", () => {
+  it("定义了 8 个内置 Agent", () => {
     expect(BUILTIN_AGENTS).toBeArray()
-    expect(BUILTIN_AGENTS.length).toBe(7)
+    expect(BUILTIN_AGENTS.length).toBe(8)
   })
 
   it("每个 Agent 都有必需的字段", () => {

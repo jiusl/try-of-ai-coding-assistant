@@ -50,7 +50,7 @@ export interface StreamChunk {
 }
 
 // ========== 配置类型 ==========
-export type ProviderType = "openai" | "anthropic" | "deepseek"
+export type ProviderType = "openai" | "anthropic" | "deepseek" | "ollama"
 
 export interface ModelConfig {
   name: string

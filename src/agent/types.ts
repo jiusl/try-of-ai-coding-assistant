@@ -19,6 +19,7 @@ export type AgentCapability =
   | "document"   // 文档
   | "execute"    // 执行命令
   | "delegate"   // 委派子任务
+  | "web-fetch"  // 网页抓取
 
 // ====================================================
 // Agent 配置
@@ -78,6 +79,7 @@ export interface AgentExecutionOptions {
   sessionId: string
   userInput: string
   maxIterations?: number
+  model?: string
   onChunk?: (chunk: string) => void
   onToolCall?: (toolCall: ToolCall, result?: ToolResult) => void
   onPhaseChange?: (state: ExecutionState) => void

@@ -74,6 +74,7 @@ export const AgentServiceLive = Layer.effect(
       sessionId,
       userInput,
       ...(options?.maxIterations !== undefined ? { maxIterations: options.maxIterations } : {}),
+      ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.onChunk ? { onChunk: options.onChunk } : {}),
       ...(options?.onToolCall ? { onToolCall: options.onToolCall } : {}),
       ...(options?.onPhaseChange ? { onPhaseChange: options.onPhaseChange } : {}),
