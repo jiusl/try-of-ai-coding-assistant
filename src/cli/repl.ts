@@ -4,6 +4,7 @@ import readline from "readline"
 import chalk from "chalk"
 import { AppRuntime } from "../effect/app-runtime.js"
 import { AgentServiceTag } from "../agent/index.js"
+import { MaxIterationsExceededError } from "../agent/types.js"
 import { Session } from "../session/session.js"
 import { createStreamHandler, printUserMessage, printAssistantMessage, printSystemMessage } from "./output.js"
 
@@ -159,7 +160,12 @@ export class REPL {
         })
       }).pipe(
         Effect.catchAll((error) => {
-          printSystemMessage(`Error: ${(error as any).message || String(error)}`, "error")
+          if (error instanceof MaxIterationsExceededError) {
+            printSystemMessage(error.message, "error")
+          } else {
+            const msg = (error as any).message || String(error)
+            printSystemMessage(`Error: ${msg}`, "error")
+          }
           return Effect.succeed(null)
         })
       )

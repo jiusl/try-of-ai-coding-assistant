@@ -149,7 +149,7 @@ export const AgentRegistryLive = Layer.effect(
         const agents = yield* list({ enabledOnly: true })
         
         if (agents.length === 0) {
-          return yield* Effect.fail(new AgentNotFoundError({ agentId: "no agents available" }))
+          return yield* Effect.fail(new AgentNotFoundError({ agentId: "无可用的 Agent" }))
         }
         
         const lowerMsg = message.toLowerCase()

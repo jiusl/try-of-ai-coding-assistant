@@ -61,7 +61,7 @@ export const GrepTool: ToolDefinition<typeof GrepInput.Type, Array<{ file: strin
         try: () => glob(searchPath, { cwd, absolute: true }),
         catch: (error) => new ToolExecutionError({
           toolName: "grep",
-          message: `Failed to find files for grep: ${searchPath}`,
+          message: `grep 文件查找失败: ${searchPath}`,
           cause: error
         })
       })

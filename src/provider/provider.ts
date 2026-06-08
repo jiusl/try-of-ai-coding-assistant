@@ -229,7 +229,7 @@ const getProviderFromModel = (model?: string): Effect.Effect<ProviderType, Provi
   }).pipe(
     Effect.mapError(error => new ProviderErrorClass({
       provider: "openai",
-      message: `Failed to determine provider from model: ${error}`
+      message: `无法根据模型名称推断 Provider: ${error}`
     }))
   )
 
@@ -331,7 +331,7 @@ export const ProviderLive = Layer.effect(
         if (!choice) {
           return yield* Effect.fail(new ProviderErrorClass({
             provider: "openai",
-            message: "No completion choices returned"
+            message: "API 未返回任何回复内容"
           }))
         }
         
@@ -454,7 +454,7 @@ export const ProviderLive = Layer.effect(
         if (!choice) {
           return yield* Effect.fail(new ProviderErrorClass({
             provider: "deepseek",
-            message: "No completion choices returned"
+            message: "API 未返回任何回复内容"
           }))
         }
         
@@ -724,7 +724,7 @@ export const ProviderLive = Layer.effect(
           default:
             return yield* Effect.fail(new ProviderErrorClass({
               provider: provider as ProviderType,
-              message: `Unsupported provider: ${provider}`
+              message: `不支持的 Provider: ${provider}`
             }))
         }
         

@@ -9,6 +9,7 @@ import { AgentRegistry } from "./registry.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState, ExecutionPhase } from "./types.js"
 import { AgentExecutionError, MaxIterationsExceededError, NoToolsAvailableError } from "./types.js"
+import { SkillContextInjector } from "../skill/context-injector.js"
 
 // ====================================================
 // 服务接口
@@ -19,13 +20,13 @@ export interface AgentExecutorService {
   readonly execute: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError>
+  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError>
   
   /** 执行 Agent（流式，推送执行状态）*/
   readonly executeStream: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Stream.Stream<ExecutionState, AgentExecutionError>
+  ) => Stream.Stream<ExecutionState, AgentExecutionError | MaxIterationsExceededError>
 }
 
 export class AgentExecutor extends Context.Tag("AgentExecutor")<
@@ -82,6 +83,7 @@ export const AgentExecutorLive = Layer.effect(
     const session = yield* Session
     const toolRegistry = yield* ToolRegistry
     const agentRegistry = yield* AgentRegistry
+    const skillInjector = yield* SkillContextInjector
     
     const DEFAULT_MAX_ITERATIONS = 15
     const DELEGATE_MAX_ITERATIONS = 8
@@ -142,13 +144,19 @@ export const AgentExecutorLive = Layer.effect(
         const buildMessages = (): Effect.Effect<Message[], Error> =>
           Effect.gen(function* () {
             const history = yield* session.getConversationHistory(sessionId)
+            // 注入匹配的 Skill 上下文
+            const skillContext = yield* skillInjector.injectRelevantSkills(userInput)
+            const systemPrompt = skillContext
+              ? `${agent.systemPrompt}\n\n<!-- 相关 Skill 上下文 -->\n${skillContext}`
+              : agent.systemPrompt
             return [
-              { role: "system", content: agent.systemPrompt },
+              { role: "system", content: systemPrompt },
               ...history
             ]
           })
         
         let currentMessages = yield* buildMessages()
+        const initialMessageCount = currentMessages.length  // 追踪初始消息数，用于超限时持久化增量
         let iterations = 0
         const allToolCalls: ToolCall[] = []
         const allToolResults: ToolResult[] = []
@@ -322,6 +330,19 @@ export const AgentExecutorLive = Layer.effect(
         }
         
         if (iterations >= maxIterations && !finalContent) {
+          // 将本轮新增的消息持久化到 session，以便用户可以在下一轮继续
+          for (let i = initialMessageCount; i < currentMessages.length; i++) {
+            const msg = currentMessages[i]!
+            if (msg.role === "assistant") {
+              if (msg.tool_calls && msg.tool_calls.length > 0) {
+                yield* session.addAssistantMessageWithToolCalls(sessionId, msg.content, msg.tool_calls)
+              } else {
+                yield* session.addAssistantMessage(sessionId, msg.content ?? "")
+              }
+            } else if (msg.role === "tool" && msg.tool_call_id) {
+              yield* session.addToolMessage(sessionId, msg.tool_call_id, msg.content ?? "")
+            }
+          }
           return yield* Effect.fail(new MaxIterationsExceededError({ maxIterations }))
         }
         
@@ -349,8 +370,8 @@ export const AgentExecutorLive = Layer.effect(
     const execute = (
       agent: AgentConfig,
       options: AgentExecutionOptions
-    ): Effect.Effect<AgentExecutionResult, AgentExecutionError> =>
-      executeInternal(agent, options) as Effect.Effect<AgentExecutionResult, AgentExecutionError>
+    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError> =>
+      executeInternal(agent, options)
     
     const executeStream = (
       agent: AgentConfig,

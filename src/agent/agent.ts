@@ -1,7 +1,7 @@
 // src/agent/agent.ts
 import { Context, Effect, Layer, Ref, Option, Stream, Fiber } from "effect"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState } from "./types.js"
-import { AgentNotFoundError, AgentExecutionError } from "./types.js"
+import { AgentNotFoundError, AgentExecutionError, MaxIterationsExceededError } from "./types.js"
 import { AgentRegistry } from "./registry.js"
 import { AgentExecutor } from "./executor.js"
 import { Session } from "../session/session.js"
@@ -17,7 +17,7 @@ export interface AgentService {
     agentId: string,
     userInput: string,
     options?: Partial<Omit<AgentExecutionOptions, "sessionId" | "userInput">>
-  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | AgentNotFoundError>
+  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | AgentNotFoundError | MaxIterationsExceededError>
   
   /** 运行 Agent（流式）*/
   readonly runStream: (
@@ -25,7 +25,7 @@ export interface AgentService {
     agentId: string,
     userInput: string,
     options?: Partial<Omit<AgentExecutionOptions, "sessionId" | "userInput">>
-  ) => Stream.Stream<ExecutionState, AgentExecutionError | AgentNotFoundError>
+  ) => Stream.Stream<ExecutionState, AgentExecutionError | AgentNotFoundError | MaxIterationsExceededError>
   
   /** 列出所有 Agent */
   readonly listAgents: () => Effect.Effect<AgentConfig[]>
@@ -44,7 +44,7 @@ export interface AgentService {
     sessionId: string,
     userInput: string,
     options?: Partial<Omit<AgentExecutionOptions, "sessionId" | "userInput">>
-  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError>
+  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError>
 }
 
 export class AgentServiceTag extends Context.Tag("AgentService")<

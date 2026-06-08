@@ -10,6 +10,13 @@ import { RuleEngineLive } from "../permission/rule-engine.js"
 import { PermissionLive } from "../permission/permission.js"
 import { ToolRegistryLive } from "../tool/index.js"
 import { AgentRegistryLive, AgentExecutorLive, AgentServiceLive } from "../agent/index.js"
+import {
+  SkillLoaderLive,
+  SkillRegistryLive,
+  SkillSystemLive,
+  SkillInitLive,
+  SkillContextInjectorLive,
+} from "../skill/index.js"
 
 // 使用 Layer.empty + provideMerge 构建无依赖的闭合 Layer
 // 原则：需要某依赖的层必须在提供该依赖的层之前（需求在前，提供在后）
@@ -18,6 +25,11 @@ export const AppLayer = Layer.empty.pipe(
   Layer.provideMerge(AgentRegistryLive),
   Layer.provideMerge(AgentExecutorLive),
   Layer.provideMerge(ToolRegistryLive),
+  Layer.provideMerge(SkillInitLive),
+  Layer.provideMerge(SkillSystemLive),
+  Layer.provideMerge(SkillContextInjectorLive),
+  Layer.provideMerge(SkillRegistryLive),
+  Layer.provideMerge(SkillLoaderLive),
   Layer.provideMerge(ProviderLive),
   Layer.provideMerge(PermissionLive),
   Layer.provideMerge(AuthLive),

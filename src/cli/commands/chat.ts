@@ -3,7 +3,8 @@ import { Command } from "commander"
 import { Effect } from "effect"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { AgentServiceTag } from "../../agent/index.js"
-import { createStreamHandler, printAssistantMessage } from "../output.js"
+import { MaxIterationsExceededError } from "../../agent/types.js"
+import { createStreamHandler, printAssistantMessage, printSystemMessage } from "../output.js"
 import { REPL } from "../repl.js"
 
 // ====================================================
@@ -47,7 +48,19 @@ export const chatCommand = new Command("chat")
     if (message) {
       // 单次消息模式：解析会话 → 执行 → 退出
       const resolvedId = await REPL.resolveSession(sessionId)
-      await AppRuntime.runPromise(runChat(resolvedId, message, verbose))
+      await AppRuntime.runPromise(
+        runChat(resolvedId, message, verbose).pipe(
+          Effect.catchAll((error) => {
+            if (error instanceof MaxIterationsExceededError) {
+              printSystemMessage(error.message, "error")
+            } else {
+              const msg = error instanceof Error ? error.message : String(error)
+              printSystemMessage(`Error: ${msg}`, "error")
+            }
+            return Effect.succeed(null)
+          })
+        )
+      )
       process.exit(0)
     }
 

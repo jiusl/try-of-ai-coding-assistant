@@ -74,7 +74,11 @@ export class PermissionDeniedError extends Data.TaggedError("PermissionDenied")<
   target: string
   reason: string
   ruleId?: string
-}> {}
+}> {
+  override get message(): string {
+    return `权限被拒绝：${this.reason}（操作: ${this.action}，目标: ${this.target}）`
+  }
+}
 
 export class PermissionAskError extends Data.TaggedError("PermissionAsk")<{
   action: Action

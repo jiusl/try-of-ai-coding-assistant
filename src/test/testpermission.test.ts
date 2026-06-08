@@ -266,14 +266,13 @@ describe("场景 3: RuleEngine evaluate & 临时覆盖", () => {
     expect(decision).toBe("deny")
   })
 
-  it("evaluate — 没有匹配规则时抛出 PermissionDeniedError", async () => {
-    const result = await runEngine(Effect.gen(function* () {
+  it("evaluate — 没有匹配规则时默认返回 deny", async () => {
+    const decision = await runEngine(Effect.gen(function* () {
       const engine = yield* RuleEngineService
-      return yield* Effect.either(
-        engine.evaluate({ action: "write", target: "any.txt", context: makeCtx() })
-      )
+      // evaluate 永远返回 Decision，不会抛异常；无规则匹配时默认 deny
+      return yield* engine.evaluate({ action: "network", target: "https://unknown.api/endpoint", context: makeCtx() })
     }))
-    expect(result._tag).toBe("Left")
+    expect(decision).toBe("deny")
   })
 
   it("temporaryOverride — 覆盖规则决策为 allow", async () => {
@@ -297,7 +296,7 @@ describe("场景 3: RuleEngine evaluate & 临时覆盖", () => {
   })
 
   it("clearOverrides — 清除覆盖后恢复原决策", async () => {
-    const result = await runEngine(Effect.gen(function* () {
+    const decision = await runEngine(Effect.gen(function* () {
       const engine = yield* RuleEngineService
       yield* engine.addRule({
         id: "clear-test",
@@ -308,11 +307,10 @@ describe("场景 3: RuleEngine evaluate & 临时覆盖", () => {
       })
       yield* engine.temporaryOverride("clear-test", "allow")
       yield* engine.clearOverrides()
-      return yield* Effect.either(
-        engine.evaluate({ action: "execute", target: "rm -rf /", context: makeCtx() })
-      )
+      // evaluate 返回 Decision，清除覆盖后恢复为 deny
+      return yield* engine.evaluate({ action: "execute", target: "rm -rf /", context: makeCtx() })
     }))
-    expect(result._tag).toBe("Left")
+    expect(decision).toBe("deny")
   })
 })
 
@@ -804,7 +802,7 @@ describe("场景 11: 条件评估", () => {
   })
 
   it("条件 context.isCI === false 在 CI 环境下 → deny", async () => {
-    const result = await runEngine(Effect.gen(function* () {
+    const decision = await runEngine(Effect.gen(function* () {
       const engine = yield* RuleEngineService
       // 使用独立 action "env" 避免与场景 11.1 的 ci-only (write) 冲突
       yield* engine.addRule({
@@ -815,10 +813,9 @@ describe("场景 11: 条件评估", () => {
         priority: 100,
         condition: "context.isCI === false",
       })
-      return yield* Effect.either(
-        engine.evaluate({ action: "env", target: "ANY_VAR", context: ciContext })
-      )
+      // CI 环境下 isCI=true，条件不满足 → 规则不生效 → 默认 deny
+      return yield* engine.evaluate({ action: "env", target: "ANY_VAR", context: ciContext })
     }))
-    expect(result._tag).toBe("Left")
+    expect(decision).toBe("deny")
   })
 })

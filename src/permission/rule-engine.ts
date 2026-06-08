@@ -296,27 +296,27 @@ export const RuleEngineLive = Layer.effect(
       Effect.gen(function* () {
         if (!rule.id || rule.id.trim() === "") {
           return yield* Effect.fail(new PermissionConfigError({
-            message: "Rule must have an id"
+            message: "规则必须包含 id"
           }))
         }
         
         if (!rule.action) {
           return yield* Effect.fail(new PermissionConfigError({
-            message: "Rule must have an action",
+            message: "规则必须包含 action",
             ruleId: rule.id
           }))
         }
         
         if (!rule.pattern) {
           return yield* Effect.fail(new PermissionConfigError({
-            message: "Rule must have a pattern",
+            message: "规则必须包含 pattern",
             ruleId: rule.id
           }))
         }
         
         if (rule.priority === undefined) {
           return yield* Effect.fail(new PermissionConfigError({
-            message: "Rule must have a priority",
+            message: "规则必须包含 priority",
             ruleId: rule.id
           }))
         }
@@ -327,7 +327,7 @@ export const RuleEngineLive = Layer.effect(
             matchesPattern("test", rule.pattern)
           } catch {
             return yield* Effect.fail(new PermissionConfigError({
-              message: `Invalid glob pattern: ${rule.pattern}`,
+              message: `无效的 glob 表达式: ${rule.pattern}`,
               ruleId: rule.id
             }))
           }

@@ -29,7 +29,7 @@ export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
         try: () => mkdir(dirname(fullPath), { recursive: true }),
         catch: (error) => new ToolExecutionError({
           toolName: "write_file",
-          message: `Failed to create directory for: ${input.filePath}`,
+          message: `创建目录失败: ${input.filePath}`,
           cause: error
         })
       })
@@ -38,11 +38,11 @@ export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
         try: () => writeFile(fullPath, input.content, "utf-8"),
         catch: (error) => new ToolExecutionError({
           toolName: "write_file",
-          message: `Failed to write file: ${input.filePath}`,
+          message: `写入文件失败: ${input.filePath}`,
           cause: error
         })
       })
       
-      return `Successfully wrote to ${input.filePath}`
+      return `成功写入 ${input.filePath}`
     })
 }

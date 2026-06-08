@@ -29,7 +29,7 @@ export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
         try: () => readFile(fullPath, "utf-8"),
         catch: (error) => new ToolExecutionError({
           toolName: "read_file",
-          message: `Failed to read file: ${input.filePath}`,
+          message: `读取文件失败: ${input.filePath}`,
           cause: error
         })
       })

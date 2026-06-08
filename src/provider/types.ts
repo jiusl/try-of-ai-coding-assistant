@@ -70,7 +70,11 @@ export class ProviderError extends Data.TaggedError("ProviderError")<{
 export class SDKNotInstalledError extends Data.TaggedError("SDKNotInstalled")<{
   provider: ProviderType
   installCommand: string
-}> {}
+}> {
+  override get message(): string {
+    return `${this.provider} SDK 未安装，请运行 \`${this.installCommand}\` 安装`
+  }
+}
 
 export class AuthError extends Data.TaggedError("AuthError")<{
   provider: ProviderType

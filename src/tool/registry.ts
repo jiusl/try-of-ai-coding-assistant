@@ -179,7 +179,7 @@ export const ToolRegistryLive = Layer.effect(
         } catch (error) {
           return yield* Effect.fail(new ToolValidationError({
             toolName: tool.name,
-            message: `Invalid JSON arguments: ${argsJson}`,
+            message: `JSON 参数格式无效: ${argsJson}`,
             input: argsJson
           }))
         }
@@ -188,7 +188,7 @@ export const ToolRegistryLive = Layer.effect(
         const decoded = yield* Schema.decodeUnknown(tool.inputSchema)(rawArgs).pipe(
           Effect.mapError(parseError => new ToolValidationError({
             toolName: tool.name,
-            message: `Schema validation failed: ${parseError.message}`,
+            message: `参数校验失败: ${parseError.message}`,
             input: rawArgs
           }))
         )
@@ -205,9 +205,9 @@ export const ToolRegistryLive = Layer.effect(
           return {
             tool_call_id: toolCall.id,
             role: "tool" as const,
-            content: `Tool is disabled: ${tool.name}`,
+            content: `工具已被禁用: ${tool.name}`,
             success: false,
-            error: "Tool disabled"
+            error: "工具已禁用"
           }
         }
         
@@ -222,9 +222,9 @@ export const ToolRegistryLive = Layer.effect(
           return {
             tool_call_id: toolCall.id,
             role: "tool" as const,
-            content: `Permission denied: ${tool.name} is not allowed`,
+            content: `权限不足: ${tool.name} 操作不被允许`,
             success: false,
-            error: `Permission denied for ${tool.permission} on ${resource}`
+            error: `权限拒绝: ${tool.permission} 操作于 ${resource}`
           }
         }
         
@@ -235,9 +235,9 @@ export const ToolRegistryLive = Layer.effect(
           return {
             tool_call_id: toolCall.id,
             role: "tool" as const,
-            content: `Action requires confirmation: ${tool.name}`,
+            content: `操作需要用户确认: ${tool.name}`,
             success: false,
-            error: "Awaiting user confirmation"
+            error: "等待用户确认"
           }
         }
         

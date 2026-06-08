@@ -60,7 +60,50 @@ const convertConfigRules = (configRules: ConfigPermissionRule[]): PermissionRule
 // ====================================================
 
 export const DEFAULT_RULES: PermissionRule[] = [
-  // ==================== 文件读取 ====================
+  // ==================== 全局文件操作（最低优先级，覆盖绝�?路径） ====================
+  {
+    id: "read-all-global",
+    action: "read",
+    pattern: "**/*",
+    decision: "allow",
+    priority: 1,
+    description: "Allow reading any file from any directory (absolute or relative)"
+  },
+  {
+    id: "write-all-global",
+    action: "write",
+    pattern: "**/*",
+    decision: "allow",
+    priority: 1,
+    description: "Allow writing any file to any directory"
+  },
+  {
+    id: "edit-all-global",
+    action: "edit",
+    pattern: "**/*",
+    decision: "allow",
+    priority: 1,
+    description: "Allow editing any file in any directory"
+  },
+  // ==================== 全局命令执行（最低优先�?====================
+  {
+    id: "execute-dev-commands-global",
+    action: "execute",
+    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *}",
+    decision: "allow",
+    priority: 1,
+    description: "Allow common development commands"
+  },
+  {
+    id: "shell-dev-commands-global",
+    action: "shell",
+    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env}",
+    decision: "allow",
+    priority: 1,
+    description: "Allow common shell commands"
+  },
+
+  // ==================== 文件读取（特定类型，优先级高于全局�?====================
   {
     id: "read-project-files",
     action: "read",
@@ -444,7 +487,7 @@ export const PermissionLive = Layer.effect(
             return yield* Effect.fail(new PermissionDeniedError({
               action,
               target,
-              reason: "Operation denied by permission rules"
+              reason: "权限规则拒绝此操作"
             }))
           
           case "ask":
@@ -644,7 +687,7 @@ export const PermissionStrictLive = Layer.effect(
             return yield* Effect.fail(new PermissionDeniedError({
               action,
               target,
-              reason: "Strict mode: operations requiring confirmation are denied"
+              reason: "严格模式：需要用户确认的操作被拒绝"
             }))
           }
           

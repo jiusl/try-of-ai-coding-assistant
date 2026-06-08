@@ -103,7 +103,11 @@ export interface AgentExecutionResult {
 
 export class AgentNotFoundError extends Data.TaggedError("AgentNotFound")<{
   agentId: string
-}> {}
+}> {
+  override get message(): string {
+    return `找不到 Agent "${this.agentId}"，请检查 Agent ID 是否正确或 Agent 是否已注册`
+  }
+}
 
 export class AgentExecutionError extends Data.TaggedError("AgentExecution")<{
   agentId: string
@@ -113,8 +117,16 @@ export class AgentExecutionError extends Data.TaggedError("AgentExecution")<{
 
 export class MaxIterationsExceededError extends Data.TaggedError("MaxIterationsExceeded")<{
   maxIterations: number
-}> {}
+}> {
+  override get message(): string {
+    return `已达最大迭代次数 (${this.maxIterations})，部分进度已保存到会话中。你可以发送后续消息继续（例如输入 "继续"），或增大 maxIterations、简化任务需求`
+  }
+}
 
 export class NoToolsAvailableError extends Data.TaggedError("NoToolsAvailable")<{
   agentId: string
-}> {}
+}> {
+  override get message(): string {
+    return `Agent "${this.agentId}" 配置了工具但所有工具均不可用，请检查工具注册状态或修改 Agent 的 toolNames 配置`
+  }
+}

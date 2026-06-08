@@ -34,6 +34,6 @@ Always plan thoroughly, be analytical, and provide clear, actionable insights ba
   toolNames: ["think", "read_file", "glob", "grep"],
   temperature: 0.7,
   maxTokens: 8192,
-  maxIterations: 15,
+  maxIterations: 25,
   enabled: true
 }

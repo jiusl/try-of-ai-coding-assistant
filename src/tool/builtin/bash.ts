@@ -34,12 +34,12 @@ export const BashTool: ToolDefinition<typeof BashInput.Type, string> = {
         }),
         catch: (error) => new ToolExecutionError({
           toolName: "execute_command",
-          message: `Command failed: ${input.command}`,
+          message: `命令执行失败: ${input.command}`,
           cause: error
         })
       })
       
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n")
-      return output || "Command executed successfully (no output)"
+      return output || "命令执行成功（无输出）"
     })
 }

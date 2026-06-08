@@ -29,6 +29,6 @@ Guidelines:
   toolNames: ["execute_command", "read_file", "edit_file", "write_file", "glob", "grep", "think", "delegate"],
   temperature: 0.2,
   maxTokens: 8192,
-  maxIterations: 15,
+  maxIterations: 25,
   enabled: true
 }

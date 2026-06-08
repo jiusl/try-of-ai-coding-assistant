@@ -64,7 +64,7 @@ export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
         }),
         catch: (error) => new ToolExecutionError({
           toolName: "glob",
-          message: `Glob search failed: ${input.pattern}`,
+          message: `文件搜索失败: ${input.pattern}`,
           cause: error
         })
       })

@@ -3,6 +3,7 @@ import { Command } from "commander"
 import { Effect, Option } from "effect"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { AgentServiceTag } from "../../agent/index.js"
+import { MaxIterationsExceededError } from "../../agent/types.js"
 import { Session } from "../../session/session.js"
 import { createStreamHandler, printSystemMessage, printAssistantMessage, printTitle } from "../output.js"
 
@@ -103,7 +104,17 @@ export const runCommand = new Command("run")
         }
         
         return result
-      })
+      }).pipe(
+        Effect.catchAll((error) => {
+          if (error instanceof MaxIterationsExceededError) {
+            printSystemMessage(error.message, "error")
+          } else {
+            const msg = error instanceof Error ? error.message : String(error)
+            printSystemMessage(`Error: ${msg}`, "error")
+          }
+          return Effect.succeed(null)
+        })
+      )
     )
     
     process.exit(0)

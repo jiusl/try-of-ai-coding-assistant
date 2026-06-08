@@ -29,7 +29,7 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
         try: () => readFile(fullPath, "utf-8"),
         catch: (error) => new ToolExecutionError({
           toolName: "edit_file",
-          message: `Failed to read file: ${input.filePath}`,
+          message: `读取文件失败: ${input.filePath}`,
           cause: error
         })
       })
@@ -37,7 +37,7 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
       if (!content.includes(input.oldString)) {
         return yield* Effect.fail(new ToolExecutionError({
           toolName: "edit_file",
-          message: `String not found in file: ${input.oldString}`
+          message: `文件中未找到指定内容: ${input.oldString}`
         }))
       }
       
@@ -47,11 +47,11 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
         try: () => writeFile(fullPath, newContent, "utf-8"),
         catch: (error) => new ToolExecutionError({
           toolName: "edit_file",
-          message: `Failed to write file: ${input.filePath}`,
+          message: `写入文件失败: ${input.filePath}`,
           cause: error
         })
       })
       
-      return `Successfully edited ${input.filePath} (replaced "${input.oldString}" with "${input.newString}")`
+      return `成功编辑 ${input.filePath}（将 "${input.oldString}" 替换为 "${input.newString}"）`
     })
 }

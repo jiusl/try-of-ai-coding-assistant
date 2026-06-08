@@ -1,7 +1,7 @@
 // src/session/session.ts
 import { Context, Effect, Layer, Option } from "effect"
 import { Database, DatabaseMemoryLive } from "../infra/database.js"
-import type { Message } from "../provider/types.js"
+import type { Message, ToolCall } from "../provider/types.js"
 
 // ====================================================
 // 类型定义
@@ -49,6 +49,13 @@ export interface SessionService {
   
   /** 添加 AI 响应 */
   readonly addAssistantMessage: (sessionId: string, content: string) => Effect.Effect<Message, Error>
+  
+  /** 添加带 tool_calls 的 AI 响应（用于持久化中间迭代状态） */
+  readonly addAssistantMessageWithToolCalls: (
+    sessionId: string,
+    content: string | null,
+    toolCalls: ToolCall[]
+  ) => Effect.Effect<Message, Error>
   
   /** 添加工具调用结果 */
   readonly addToolMessage: (sessionId: string, toolCallId: string, content: string) => Effect.Effect<Message, Error>
@@ -102,10 +109,17 @@ export const SessionLive = Layer.effect(
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         tool_call_id TEXT,
+        tool_calls TEXT,
         created_at INTEGER NOT NULL,
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       )
     `)
+    
+    // 兼容旧数据库：确保 tool_calls 列存在
+    yield* Effect.catchAll(
+      db.run(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`),
+      () => Effect.void  // 列已存在则忽略
+    )
     
     // 创建索引优化查询性能
     yield* db.run(`CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)`)
@@ -196,9 +210,10 @@ export const SessionLive = Layer.effect(
           role: string
           content: string
           tool_call_id: string | null
+          tool_calls: string | null
           created_at: number
         }>(
-          `SELECT role, content, tool_call_id, created_at 
+          `SELECT role, content, tool_call_id, tool_calls, created_at 
            FROM messages 
            WHERE session_id = ? 
            ORDER BY created_at ASC, id ASC`,
@@ -215,6 +230,11 @@ export const SessionLive = Layer.effect(
             }
             if (m.tool_call_id) {
               msg.tool_call_id = m.tool_call_id
+            }
+            if (m.tool_calls) {
+              try {
+                msg.tool_calls = JSON.parse(m.tool_calls)
+              } catch { /* ignore */ }
             }
             return msg as unknown as Message
           }),
@@ -292,16 +312,17 @@ export const SessionLive = Layer.effect(
       sessionId: string, 
       role: string, 
       content: string, 
-      toolCallId?: string
+      toolCallId?: string,
+      toolCallsJson?: string
     ) =>
       atomic(
         Effect.gen(function* () {
           const now = Date.now()
           
           yield* db.run(
-            `INSERT INTO messages (session_id, role, content, tool_call_id, created_at) 
-             VALUES (?, ?, ?, ?, ?)`,
-            [sessionId, role, content, toolCallId ?? null, now]
+            `INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, created_at) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [sessionId, role, content, toolCallId ?? null, toolCallsJson ?? null, now]
           )
           
           yield* db.run(
@@ -316,6 +337,12 @@ export const SessionLive = Layer.effect(
           
           if (toolCallId) {
             message.tool_call_id = toolCallId
+          }
+          
+          if (toolCallsJson) {
+            try {
+              message.tool_calls = JSON.parse(toolCallsJson)
+            } catch { /* ignore */ }
           }
           
           return message as unknown as Message
@@ -334,6 +361,14 @@ export const SessionLive = Layer.effect(
     const addAssistantMessage = (sessionId: string, content: string) =>
       addMessage(sessionId, "assistant", content)
     
+    /** 添加带 tool_calls 的 AI 响应（持久化中间迭代状态） */
+    const addAssistantMessageWithToolCalls = (
+      sessionId: string,
+      content: string | null,
+      toolCalls: ToolCall[]
+    ) =>
+      addMessage(sessionId, "assistant", content ?? "", undefined, JSON.stringify(toolCalls))
+    
     // ====================================================
     // 添加工具调用结果
     // ====================================================
@@ -349,8 +384,9 @@ export const SessionLive = Layer.effect(
           role: string
           content: string
           tool_call_id: string | null
+          tool_calls: string | null
         }>(
-          `SELECT role, content, tool_call_id 
+          `SELECT role, content, tool_call_id, tool_calls 
            FROM messages 
            WHERE session_id = ? 
            ORDER BY created_at ASC, id ASC`,
@@ -364,6 +400,11 @@ export const SessionLive = Layer.effect(
           }
           if (m.tool_call_id) {
             msg.tool_call_id = m.tool_call_id
+          }
+          if (m.tool_calls) {
+            try {
+              msg.tool_calls = JSON.parse(m.tool_calls)
+            } catch { /* ignore */ }
           }
           return msg as unknown as Message
         })
@@ -464,6 +505,7 @@ export const SessionLive = Layer.effect(
       list,
       addUserMessage,
       addAssistantMessage,
+      addAssistantMessageWithToolCalls,
       addToolMessage,
       getConversationHistory,
       getLastMessages,

@@ -65,7 +65,11 @@ export interface ToolResult {
 
 export class ToolNotFoundError extends Data.TaggedError("ToolNotFound")<{
   toolName: string
-}> {}
+}> {
+  override get message(): string {
+    return `找不到工具 "${this.toolName}"，请检查工具是否已注册或名称是否正确`
+  }
+}
 
 export class ToolExecutionError extends Data.TaggedError("ToolExecution")<{
   toolName: string
@@ -84,7 +88,11 @@ export class ToolPermissionError extends Data.TaggedError("ToolPermission")<{
   action: string
   resource: string
   reason: string
-}> {}
+}> {
+  override get message(): string {
+    return `工具 "${this.toolName}" 权限不足：${this.reason}（操作: ${this.action}，资源: ${this.resource}）`
+  }
+}
 
 /** 工具错误联合类型 */
 export type ToolError = ToolNotFoundError | ToolExecutionError | ToolValidationError | ToolPermissionError
