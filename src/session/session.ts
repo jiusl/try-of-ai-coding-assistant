@@ -563,7 +563,18 @@ export const SessionMockLive = Layer.succeed(Session, {
   
   addAssistantMessage: (sessionId: string, content: string) =>
     Effect.succeed({ role: "assistant" as const, content } as Message),
-  
+
+  addAssistantMessageWithToolCalls: (
+    sessionId: string,
+    content: string | null,
+    toolCalls: ToolCall[],
+  ) =>
+    Effect.succeed({
+      role: "assistant" as const,
+      content,
+      tool_calls: toolCalls,
+    } as Message),
+
   addToolMessage: (sessionId: string, toolCallId: string, content: string) =>
     Effect.succeed({ role: "tool" as const, content, tool_call_id: toolCallId } as unknown as Message),
   

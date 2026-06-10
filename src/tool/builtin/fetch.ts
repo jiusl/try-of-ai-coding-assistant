@@ -4,18 +4,20 @@ import type { ToolDefinition } from "../types.js"
 import { ToolExecutionError } from "../types.js"
 
 const FetchInputSchema = Schema.Struct({
-  url: Schema.String,
-  query: Schema.optional(Schema.String)
+  url: Schema.String
 })
 
 export const FetchWebpageTool: ToolDefinition<typeof FetchInputSchema.Type, string> = {
   name: "fetch_webpage",
   description:
     "Fetch and extract the main text content from a web page given its URL. " +
-    "Optionally provide a query to search for specific information within the page. " +
+    "Returns the full extracted text — the Agent is responsible for determining " +
+    "which parts are relevant to the current task. " +
     "Use this tool to read documentation, API references, tutorials, blog posts, or any publicly accessible web content.",
   category: "search",
   permission: "read",
+  sideEffect: "read",
+  safeToRetry: true,
   inputSchema: FetchInputSchema,
   defaultEnabled: true,
 
@@ -46,7 +48,7 @@ export const FetchWebpageTool: ToolDefinition<typeof FetchInputSchema.Type, stri
           }
 
           const html = await response.text()
-          return extractText(html, input.query)
+          return extractText(html)
         },
         catch: (err) =>
           new ToolExecutionError({
@@ -64,7 +66,7 @@ export const FetchWebpageTool: ToolDefinition<typeof FetchInputSchema.Type, stri
 // 简易 HTML → 文本提取
 // ====================================================
 
-function extractText(html: string, query?: string): string {
+function extractText(html: string): string {
   // 去除 script / style / head / nav / footer / header 标签内容
   let cleaned = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
@@ -97,27 +99,11 @@ function extractText(html: string, query?: string): string {
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
 
-  // 如果有查询，只保留包含查询关键词的行及上下文
-  if (query) {
-    const keywords = query.toLowerCase().split(/\s+/)
-    const relevant: string[] = []
-    for (let i = 0; i < lines.length; i++) {
-      const lower = lines[i]!.toLowerCase()
-      if (keywords.some((kw) => lower.includes(kw))) {
-        // 添加上下文（前后各 2 行）
-        const start = Math.max(0, i - 2)
-        const end = Math.min(lines.length, i + 3)
-        for (let j = start; j < end; j++) {
-          if (!relevant.includes(lines[j]!)) {
-            relevant.push(lines[j]!)
-          }
-        }
-      }
-    }
-    if (relevant.length > 0) {
-      return (title ? `# ${title}\n\n` : "") + relevant.join("\n")
-    }
+  const result = lines.join("\n")
+
+  if (title) {
+    return `# ${title}\n\n${result}`
   }
 
-  return (title ? `# ${title}\n\n` : "") + lines.join("\n")
+  return result
 }

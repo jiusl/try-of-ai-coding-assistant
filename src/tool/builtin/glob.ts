@@ -12,8 +12,8 @@ const GlobInputSchema = Schema.Struct({
   ignore: Schema.optional(Schema.Array(Schema.String))
 })
 
-/** 简易递归 glob：使用 fs.readdir + micromatch */
-const glob = async (
+/** 简易递归 glob：使用 fs.readdir + micromatch。导出供其他 Tool 复用。 */
+export const glob = async (
   pattern: string,
   options: { cwd: string; ignore?: readonly string[]; absolute?: boolean; nodir?: boolean }
 ): Promise<string[]> => {
@@ -46,6 +46,8 @@ export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
   description: "Find files matching a glob pattern (e.g., '**/*.ts'). Supports absolute paths for cwd.",
   category: "search",
   permission: "read",
+  sideEffect: "read",
+  safeToRetry: true,
   inputSchema: GlobInputSchema,
   defaultEnabled: true,
   

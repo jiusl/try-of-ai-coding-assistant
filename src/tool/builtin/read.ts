@@ -16,6 +16,8 @@ export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
   description: "Read the contents of a file. Supports absolute paths (e.g. D:/projects/main.ts) and relative paths from workspace.",
   category: "file",
   permission: "read",
+  sideEffect: "read",
+  safeToRetry: true,
   inputSchema: ReadInputSchema,
   defaultEnabled: true,
   

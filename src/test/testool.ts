@@ -70,6 +70,8 @@ const makeTestTool = (overrides?: Partial<ToolDefinition>): any => ({
   description: "Echo back the input",
   category: "search" as ToolCategory,
   permission: "read" as Action,
+  sideEffect: "read" as const,
+  safeToRetry: true,
   inputSchema: mkStruct({ message: Schema.String }),
   defaultEnabled: true,
   execute: (input: any, _ctx: any) =>
@@ -82,6 +84,8 @@ const makeFailingTool = (overrides?: Partial<ToolDefinition>): any => ({
   description: "Always fails",
   category: "search" as ToolCategory,
   permission: "read" as Action,
+  sideEffect: "read" as const,
+  safeToRetry: true,
   inputSchema: mkStruct({ code: Schema.Number }),
   defaultEnabled: true,
   execute: (_input: any, _ctx: any) =>
@@ -97,6 +101,8 @@ const makeSucceedTool = (name: string): any => ({
   description: `Tool ${name}`,
   category: "file" as ToolCategory,
   permission: "read" as Action,
+  sideEffect: "read" as const,
+  safeToRetry: true,
   inputSchema: mkStruct({ value: Schema.String }),
   defaultEnabled: true,
   execute: (input: any, _ctx: any) => Effect.succeed(`result: ${input.value}`),
@@ -109,6 +115,7 @@ const makeSucceedTool = (name: string): any => ({
 const testContext: ToolContext = {
   sessionId: "test-session-001",
   workspaceRoot: "/tmp/test-workspace",
+  isInteractive: false,
 }
 
 const makeToolCall = (name: string, args: unknown, id?: string): ToolCall => ({
@@ -504,7 +511,7 @@ describe("场景 5: 列表与启禁", () => {
 // ============================================================
 
 describe("场景 6: 内置工具注册", () => {
-  it("所有 7 个内置工具均已注册", async () => {
+  it("所有 10 个内置工具均已注册", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* ToolRegistry
       const all = yield* registry.list()
@@ -512,23 +519,32 @@ describe("场景 6: 内置工具注册", () => {
       expect(names.has("read_file")).toBe(true)
       expect(names.has("write_file")).toBe(true)
       expect(names.has("edit_file")).toBe(true)
-      expect(names.has("execute_command")).toBe(true)
+      expect(names.has("run_command")).toBe(true)
+      expect(names.has("read_command")).toBe(true)
       expect(names.has("glob")).toBe(true)
       expect(names.has("grep")).toBe(true)
       expect(names.has("think")).toBe(true)
+      expect(names.has("fetch_webpage")).toBe(true)
+      expect(names.has("file_exists")).toBe(true)
     })
     await runTool(program)
   })
 
-  it("内置工具 requireConfirm 设置正确", async () => {
+  it("内置工具 requireConfirm / sideEffect 设置正确", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* ToolRegistry
 
-      const bashTool = yield* registry.get("execute_command")
-      expect(bashTool.requireConfirm).toBe(true)
+      const runCmd = yield* registry.get("run_command")
+      expect(runCmd.requireConfirm).toBe(true)
+      expect(runCmd.sideEffect).toBe("write")
+
+      const readCmd = yield* registry.get("read_command")
+      expect(readCmd.requireConfirm).toBe(false)
+      expect(readCmd.sideEffect).toBe("read")
 
       const readTool = yield* registry.get("read_file")
       expect(readTool.requireConfirm).toBeUndefined()
+      expect(readTool.sideEffect).toBe("read")
     })
     await runTool(program)
   })

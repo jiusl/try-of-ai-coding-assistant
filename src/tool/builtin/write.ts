@@ -15,6 +15,8 @@ export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
   description: "Write content to a file. Supports absolute paths and relative paths. Creates parent directories if needed.",
   category: "file",
   permission: "write",
+  sideEffect: "write",
+  safeToRetry: false,
   inputSchema: WriteInputSchema,
   defaultEnabled: true,
   

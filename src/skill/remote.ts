@@ -68,7 +68,7 @@ export interface SkillRemoteService {
    */
   readonly clearCache: (
     workspaceRoot: string,
-  ) => Effect.Effect<void>
+  ) => Effect.Effect<void, RemoteSkillError>
 
   /**
    * 从 GitHub 仓库下载（便捷方法）
@@ -138,17 +138,9 @@ export const SkillRemoteLive = Layer.sync(SkillRemote, () => {
         const skillDir = path.join(remoteDir, nameFromUrl)
 
         // 检查是否已存在
-        const exists = yield* Effect.tryPromise({
-          try: async () => {
-            try {
-              await fs.access(skillDir)
-              return true
-            } catch {
-              return false
-            }
-          },
-          catch: () => false,
-        })
+        const exists = yield* Effect.promise(() =>
+          fs.access(skillDir).then(() => true, () => false)
+        )
 
         if (exists) {
           return skillDir
@@ -186,17 +178,14 @@ export const SkillRemoteLive = Layer.sync(SkillRemote, () => {
     })
 
   const listCached = (workspaceRoot: string) =>
-    Effect.tryPromise({
-      try: async () => {
-        const remoteDir = path.join(workspaceRoot, "skills", "remote")
-        try {
-          const entries = await fs.readdir(remoteDir, { withFileTypes: true })
-          return entries.filter((e) => e.isDirectory()).map((e) => e.name)
-        } catch {
-          return [] as string[]
-        }
-      },
-      catch: () => [] as string[],
+    Effect.promise(async () => {
+      const remoteDir = path.join(workspaceRoot, "skills", "remote")
+      try {
+        const entries = await fs.readdir(remoteDir, { withFileTypes: true })
+        return entries.filter((e) => e.isDirectory()).map((e) => e.name)
+      } catch {
+        return [] as string[]
+      }
     })
 
   const clearCache = (workspaceRoot: string) =>
@@ -216,13 +205,15 @@ export const SkillRemoteLive = Layer.sync(SkillRemote, () => {
     workspaceRoot: string,
     repo: string,
     options?: { ref?: string; subPath?: string },
-  ) =>
-    download(workspaceRoot, {
+  ) => {
+    const source: GitSource = {
       type: "git",
       url: `https://github.com/${repo}.git`,
-      ref: options?.ref,
-      subPath: options?.subPath,
-    })
+      ...(options?.ref !== undefined ? { ref: options.ref } : {}),
+      ...(options?.subPath !== undefined ? { subPath: options.subPath } : {}),
+    }
+    return download(workspaceRoot, source)
+  }
 
   return { download, listCached, clearCache, downloadFromGitHub }
 })

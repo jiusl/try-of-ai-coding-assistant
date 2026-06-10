@@ -25,6 +25,10 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   permission: Action
   /** 输入参数 Schema（用于验证和生成 JSON Schema） */
   inputSchema: Schema.Schema<any>
+  /** 副作用级别：只读 / 写入（驱动确认机制和重试策略） */
+  sideEffect: "read" | "write"
+  /** 是否可安全重试（只读操作通常为 true，幂等写入也可为 true） */
+  safeToRetry: boolean
   /** 是否需要用户确认（覆盖 permission 默认行为） */
   requireConfirm?: boolean
   /** 是否在所有 Agent 中默认启用 */
@@ -38,6 +42,8 @@ export interface ToolContext {
   sessionId: string
   workspaceRoot: string
   abortSignal?: AbortSignal
+  /** 当前是否为交互式会话（终端可接受用户输入） */
+  isInteractive: boolean
 }
 
 /** 工具调用（来自 LLM）*/

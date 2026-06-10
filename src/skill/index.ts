@@ -7,6 +7,7 @@ import { SkillRegistry, SkillRegistryLive } from "./registry.js"
 import { SkillExecutor, SkillExecutorLive } from "./executor.js"
 import { SkillContextInjector, SkillContextInjectorLive } from "./context-injector.js"
 import { SkillRemote, SkillRemoteLive } from "./remote.js"
+import { SkillLoadError, SkillParseError } from "./types.js"
 
 // ====================================================
 // SkillSystem — 统一入口服务
@@ -17,14 +18,14 @@ export interface SkillSystemService {
    * 初始化 Skill 系统：扫描并加载所有 Skill，注册到 Registry。
    * 应在应用启动时调用。
    */
-  readonly initialize: (workspaceRoot: string) => Effect.Effect<number> // 返回加载数量
+  readonly initialize: (workspaceRoot: string) => Effect.Effect<number, SkillLoadError | SkillParseError> // 返回加载数量
 
   /**
    * 热重载指定来源的 Skill
    */
   readonly reload: (
     workspaceRoot: string,
-  ) => Effect.Effect<number>
+  ) => Effect.Effect<number, SkillLoadError | SkillParseError>
 }
 
 export class SkillSystem extends Context.Tag("SkillSystem")<
@@ -90,7 +91,7 @@ export const SkillLayer = Layer.mergeAll(
 // 自动初始化 Layer（外部提供 SkillSystem，共享实例）
 // ====================================================
 
-const SkillInitTag = Context.Tag("SkillInit")<Record<string, never>>()
+const SkillInitTag = Context.GenericTag<Record<string, never>>("SkillInit")
 
 export const SkillInitLive = Layer.effect(
   SkillInitTag,

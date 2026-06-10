@@ -13,9 +13,14 @@ const EditInputSchema = Schema.Struct({
 
 export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
   name: "edit_file",
-  description: "Edit a file by replacing occurrences of oldString with newString. Supports absolute paths and relative paths.",
+  description:
+    "Replace the FIRST occurrence of oldString with newString in a file. " +
+    "The oldString must appear exactly once for the replacement to succeed. " +
+    "Supports absolute paths and relative paths.",
   category: "file",
   permission: "write",
+  sideEffect: "write",
+  safeToRetry: false,
   inputSchema: EditInputSchema,
   defaultEnabled: true,
   
@@ -41,7 +46,8 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
         }))
       }
       
-      const newContent = content.replaceAll(input.oldString, input.newString)
+      // 默认只替换首次出现（精确控制），避免意外全量替换
+      const newContent = content.replace(input.oldString, input.newString)
       
       yield* Effect.tryPromise({
         try: () => writeFile(fullPath, newContent, "utf-8"),

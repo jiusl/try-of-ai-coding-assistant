@@ -42,6 +42,7 @@ export class AgentExecutor extends Context.Tag("AgentExecutor")<
 const buildToolContext = (sessionId: string, workspaceRoot: string): ToolContext => ({
   sessionId,
   workspaceRoot,
+  isInteractive: false,
 })
 
 /** 将工具调用转换为消息格式（用于发送给 API）*/
