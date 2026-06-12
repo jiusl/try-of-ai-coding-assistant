@@ -32,7 +32,8 @@ export const OrchestratorAgent: AgentConfig = {
   toolNames: [
     "delegate",
     "read_file", "write_file", "edit_file",
-    "run_command", "read_command", "glob", "grep", "think", "file_exists"
+    "run_command", "read_command", "glob", "grep", "think", "file_exists",
+    "list_skills", "get_skill"
   ],
   temperature: 0.3,
   maxTokens: 8192,

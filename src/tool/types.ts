@@ -34,7 +34,7 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   /** 是否在所有 Agent 中默认启用 */
   defaultEnabled?: boolean
   /** 执行函数 */
-  execute: (input: TInput, context: ToolContext) => Effect.Effect<TOutput, ToolError>
+  execute: (input: TInput, context: ToolContext) => Effect.Effect<TOutput, ToolError, any>
 }
 
 /** 工具执行上下文 */

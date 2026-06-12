@@ -140,8 +140,8 @@ export const AgentServiceLive = Layer.effect(
         if (Option.isSome(currentAgentOpt) && currentAgentOpt.value.enabled !== false) {
           agent = currentAgentOpt.value
         } else {
-          // 自动选择
-          agent = yield* registry.select(userInput)
+          // 默认使用 builtin:chat
+          agent = yield* registry.get("builtin:chat")
           // 保存选择
           yield* Ref.update(sessionAgents, map => map.set(sessionId, agent.id))
         }

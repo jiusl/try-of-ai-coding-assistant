@@ -1,13 +1,11 @@
 // src/test/testskill.test.ts
-// Skill 层测试 — 加载器 + 注册表 + 上下文注入 + 执行器全场景覆盖
+// Skill 层测试 — 加载器 + 注册表 + skill 工具 + 执行器全场景覆盖
 import { Effect, ManagedRuntime, Layer } from "effect"
 import { describe, it, expect, afterAll } from "bun:test"
 import * as path from "path"
 import {
   SkillRegistry,
   SkillRegistryLive,
-  SkillContextInjector,
-  SkillContextInjectorLive,
   SkillLoader,
   SkillLoaderLive,
   SkillExecutor,
@@ -15,6 +13,8 @@ import {
   SkillSystem,
   SkillSystemLive,
 } from "../skill/index.js"
+import { ListSkillsTool, GetSkillTool } from "../tool/builtin/skill.js"
+import type { ToolContext } from "../tool/types.js"
 import type { SkillDefinition, SkillType, SkillSource } from "../skill/index.js"
 
 // ============================================================
@@ -22,6 +22,12 @@ import type { SkillDefinition, SkillType, SkillSource } from "../skill/index.js"
 // ============================================================
 
 const workspaceRoot = path.resolve(import.meta.dirname, "../..")
+
+const fakeCtx: ToolContext = {
+  sessionId: "test-session",
+  workspaceRoot: process.cwd(),
+  isInteractive: false,
+}
 
 function makeSkill(overrides: Partial<SkillDefinition> = {}): SkillDefinition {
   return {
@@ -205,79 +211,70 @@ describe("SkillRegistry", () => {
 })
 
 // ============================================================
-// ContextInjector 测试（依赖 Registry）
+// Skill 工具测试：list_skills / get_skill（依赖 Registry）
 // ============================================================
 
-describe("SkillContextInjector", () => {
-  // provideMerge: 从 Injector 出发，merge Registry 的输出到上下文
-  // 这样 Injector 构造时可获取 Registry，runtime 层也能访问 Registry
-  const testLayer = SkillContextInjectorLive.pipe(
-    Layer.provideMerge(SkillRegistryLive),
-  )
+describe("Skill Tools", () => {
+  const testLayer = SkillRegistryLive
   const runtime = ManagedRuntime.make(testLayer)
-  const run = <A, E>(
-    eff: Effect.Effect<A, E, SkillContextInjector | SkillRegistry>,
-  ) => runtime.runPromise(eff)
+  const run = <A, E>(eff: Effect.Effect<A, E, SkillRegistry>) =>
+    runtime.runPromise(eff)
 
   afterAll(() => runtime.dispose())
 
-  it("buildInjection 生成正确的注入文本", async () => {
-    const program = Effect.gen(function* () {
-      const injector = yield* SkillContextInjector
-      return injector.buildInjection(
-        makeSkill({ name: "test", content: "Hello World" }),
-      )
-    })
-    const raw = await run(program)
-    expect(raw).toContain("Hello World")
-    expect(raw).toContain('<skill_injection name="test"')
-    expect(raw).toContain("</skill_injection>")
-  })
-
-  it("injectSkills 按名称注入", async () => {
+  it("list_skills — 列出已注册的 Skill 元数据", async () => {
     const program = Effect.gen(function* () {
       const reg = yield* SkillRegistry
       yield* reg.register(
-        makeSkill({ name: "inj-test", content: "注入测试内容" }),
-      )
-      const injector = yield* SkillContextInjector
-      return yield* injector.injectSkills(["inj-test"])
-    })
-    const result = await run(program)
-    expect(result).toContain("注入测试内容")
-  })
-
-  it("injectRelevantSkills 根据消息匹配相关 Skill", async () => {
-    const program = Effect.gen(function* () {
-      const reg = yield* SkillRegistry
-      yield* reg.registerAll([
         makeSkill({
-          name: "reviewer",
-          description: "代码审查工具",
+          name: "code-review",
+          description: "代码审查规范",
           tags: ["review", "quality"],
           category: "code-quality",
         }),
-        makeSkill({
-          name: "builder",
-          description: "项目构建工具",
-          tags: ["build", "compile"],
-          category: "build",
-        }),
-      ])
-      const injector = yield* SkillContextInjector
-      return yield* injector.injectRelevantSkills("帮我 review 这段代码")
+      )
+      return yield* ListSkillsTool.execute({}, fakeCtx)
     })
     const result = await run(program)
-    expect(result).toContain("reviewer")
+    expect(result).toContain("code-review")
+    expect(result).toContain("代码审查规范")
+    expect(result).toContain("[code-quality]")
+    expect(result).toContain("review, quality")
   })
 
-  it("injectRelevantSkills 无匹配时返回空字符串", async () => {
+  it("list_skills — 空列表返回提示", async () => {
     const program = Effect.gen(function* () {
-      const injector = yield* SkillContextInjector
-      return yield* injector.injectRelevantSkills("今天天气怎么样")
+      return yield* ListSkillsTool.execute({}, fakeCtx)
     })
     const result = await run(program)
-    expect(result).toBe("")
+    expect(result).toBe("No skills found.")
+  })
+
+  it("get_skill — 按名称获取完整 Skill 文档", async () => {
+    const program = Effect.gen(function* () {
+      const reg = yield* SkillRegistry
+      yield* reg.register(
+        makeSkill({
+          name: "pr-template",
+          description: "PR 模板规范",
+          tags: ["pr", "template"],
+          category: "workflow",
+          content: "## PR 检查清单\n- 测试通过\n- 代码审查完成",
+        }),
+      )
+      return yield* GetSkillTool.execute({ name: "pr-template" }, fakeCtx)
+    })
+    const result = await run(program)
+    expect(result).toContain("pr-template")
+    expect(result).toContain("PR 模板规范")
+    expect(result).toContain("PR 检查清单")
+  })
+
+  it("get_skill — 不存在的 Skill 返回错误", async () => {
+    const program = Effect.gen(function* () {
+      return yield* GetSkillTool.execute({ name: "no-such-skill" }, fakeCtx)
+    })
+    await expect(run(program)).rejects.toThrow()
   })
 })
 

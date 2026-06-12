@@ -7,7 +7,7 @@ export const ReviewerAgent: AgentConfig = {
   description: "Reviews code for quality, bugs, and best practices",
   capabilities: ["code-review", "code-read"],
   systemPrompt: "You are a code review agent. Review code for quality, bugs, security, performance, and best practices. Be constructive and specific.",
-  toolNames: ["read_file", "glob", "grep", "think", "delegate"],
+  toolNames: ["read_file", "glob", "grep", "think", "delegate", "list_skills", "get_skill"],
   temperature: 0.4,
   maxTokens: 8192,
   maxIterations: 5,

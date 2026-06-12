@@ -9,8 +9,6 @@ import { AgentRegistry } from "./registry.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState, ExecutionPhase } from "./types.js"
 import { AgentExecutionError, MaxIterationsExceededError, NoToolsAvailableError } from "./types.js"
-import { SkillContextInjector } from "../skill/context-injector.js"
-
 // ====================================================
 // 服务接口
 // ====================================================
@@ -84,8 +82,7 @@ export const AgentExecutorLive = Layer.effect(
     const session = yield* Session
     const toolRegistry = yield* ToolRegistry
     const agentRegistry = yield* AgentRegistry
-    const skillInjector = yield* SkillContextInjector
-    
+
     const DEFAULT_MAX_ITERATIONS = 15
     const DELEGATE_MAX_ITERATIONS = 8
     const MAX_DELEGATION_DEPTH = 3
@@ -145,13 +142,8 @@ export const AgentExecutorLive = Layer.effect(
         const buildMessages = (): Effect.Effect<Message[], Error> =>
           Effect.gen(function* () {
             const history = yield* session.getConversationHistory(sessionId)
-            // 注入匹配的 Skill 上下文
-            const skillContext = yield* skillInjector.injectRelevantSkills(userInput)
-            const systemPrompt = skillContext
-              ? `${agent.systemPrompt}\n\n<!-- 相关 Skill 上下文 -->\n${skillContext}`
-              : agent.systemPrompt
             return [
-              { role: "system", content: systemPrompt },
+              { role: "system", content: agent.systemPrompt },
               ...history
             ]
           })

@@ -84,21 +84,3 @@ agentCommand
     process.exit(0)
   })
 
-// select 子命令
-agentCommand
-  .command("select <message>")
-  .description("Select the best agent for a message")
-  .action(async (message) => {
-    await AppRuntime.runPromise(
-      Effect.gen(function* () {
-        const registry = yield* AgentRegistry
-        const agent = yield* registry.select(message)
-        console.log()
-        console.log(chalk.bold("Selected Agent:"))
-        console.log(chalk.cyan(`  ${agent.id} - ${agent.name}`))
-        console.log(chalk.gray(`  ${agent.description}`))
-        console.log()
-      })
-    )
-    process.exit(0)
-  })

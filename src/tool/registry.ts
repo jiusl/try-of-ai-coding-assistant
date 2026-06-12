@@ -13,6 +13,7 @@ import {
   ToolPermissionError
 } from "./types.js"
 import { Permission } from "../permission/permission.js"
+import { SkillRegistry } from "../skill/registry.js"
 
 // ====================================================
 // Schema 转 JSON Schema（用于 LLM）
@@ -115,6 +116,7 @@ export const ToolRegistryLive = Layer.effect(
     const toolsRef = yield* Ref.make<Map<string, ToolDefinition>>(new Map())
     const enabledRef = yield* Ref.make<Set<string>>(new Set())
     const permission = yield* Permission
+    const skillRegistry = yield* SkillRegistry
     
     const register = <TInput, TOutput>(tool: ToolDefinition<TInput, TOutput>) =>
       Effect.gen(function* () {
@@ -241,8 +243,12 @@ export const ToolRegistryLive = Layer.effect(
           }
         }
         
-        // 执行工具
-        const result = yield* Effect.either(tool.execute(input as never, context))
+        // 执行工具（注入 SkillRegistry 供需要它的工具使用）
+        const result = yield* Effect.either(
+          (tool.execute(input as never, context) as unknown as Effect.Effect<unknown, Error>).pipe(
+            Effect.provideService(SkillRegistry, skillRegistry)
+          )
+        )
         if (result._tag === "Left") {
           const execError = result.left instanceof Error ? result.left : new Error(String(result.left))
           return {

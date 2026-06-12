@@ -35,7 +35,7 @@ Limitations:
 - Some sites may block automated access or return limited content
 - JavaScript-heavy SPAs may not render properly (only static HTML is extracted)
 - Content is limited to text; images, videos, and other media are not extracted`,
-  toolNames: ["fetch_webpage", "read_file", "think"],
+  toolNames: ["fetch_webpage", "read_file", "think", "list_skills", "get_skill"],
   temperature: 0.5,
   maxTokens: 8192,
   maxIterations: 15,

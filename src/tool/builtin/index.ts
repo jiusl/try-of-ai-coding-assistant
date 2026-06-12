@@ -10,6 +10,7 @@ import { GrepTool } from "./grep.js"
 import { ThinkTool } from "./think.js"
 import { FetchWebpageTool } from "./fetch.js"
 import { FileExistsTool } from "./file_exists.js"
+import { ListSkillsTool, GetSkillTool } from "./skill.js"
 
 /** 所有内置工具 */
 export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
@@ -22,7 +23,9 @@ export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
   GrepTool,
   ThinkTool,
   FetchWebpageTool,
-  FileExistsTool
+  FileExistsTool,
+  ListSkillsTool,
+  GetSkillTool,
 ]
 
 // 重新导出
@@ -36,6 +39,8 @@ export {
   GrepTool,
   ThinkTool,
   FetchWebpageTool,
-  FileExistsTool
+  FileExistsTool,
+  ListSkillsTool,
+  GetSkillTool,
 }
 export { DelegateJSONSchema, DELEGATE_TOOL_NAME } from "./delegate.js"

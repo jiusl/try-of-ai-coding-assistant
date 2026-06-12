@@ -27,7 +27,7 @@ Guidelines:
 - When delegating, provide clear and complete task descriptions
 - NEVER delegate to builtin:chat (it cannot read/write files)
 - Use think tool to plan before complex operations`,
-  toolNames: ["run_command", "read_command", "read_file", "edit_file", "write_file", "glob", "grep", "think", "file_exists", "delegate"],
+  toolNames: ["run_command", "read_command", "read_file", "edit_file", "write_file", "glob", "grep", "think", "file_exists", "delegate", "list_skills", "get_skill"],
   temperature: 0.2,
   maxTokens: 8192,
   maxIterations: 25,

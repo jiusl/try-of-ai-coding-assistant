@@ -5,7 +5,7 @@ import { SkillLoader, SkillLoaderLive } from "./loader.js"
 import type { SkillRegistryService } from "./registry.js"
 import { SkillRegistry, SkillRegistryLive } from "./registry.js"
 import { SkillExecutor, SkillExecutorLive } from "./executor.js"
-import { SkillContextInjector, SkillContextInjectorLive } from "./context-injector.js"
+
 import { SkillRemote, SkillRemoteLive } from "./remote.js"
 import { SkillLoadError, SkillParseError } from "./types.js"
 
@@ -82,7 +82,6 @@ export const SkillLayer = Layer.mergeAll(
   SkillRegistryLive,
 ).pipe(
   Layer.provideMerge(SkillExecutorLive),
-  Layer.provideMerge(SkillContextInjectorLive),
   Layer.provideMerge(SkillRemoteLive),
   Layer.provideMerge(SkillSystemLive),
 )
@@ -115,7 +114,6 @@ export const SkillIntegratedLayer = Layer.mergeAll(
   Layer.provideMerge(SkillSystemLive),
   // SkillInit 依赖 SkillSystem（左侧已提供）
   Layer.provideMerge(SkillInitLive),
-  Layer.provideMerge(SkillContextInjectorLive),
   Layer.provideMerge(SkillExecutorLive),
   Layer.provideMerge(SkillRemoteLive),
 )
@@ -138,11 +136,6 @@ export {
   SkillExecutor,
   SkillExecutorLive,
 } from "./executor.js"
-
-export {
-  SkillContextInjector,
-  SkillContextInjectorLive,
-} from "./context-injector.js"
 
 export {
   SkillRemote,

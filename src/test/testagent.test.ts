@@ -229,38 +229,6 @@ describe("场景 1: Agent 注册表", () => {
     ).rejects.toThrow()
   })
 
-  it("select — 根据消息内容自动选择 Agent", async () => {
-    const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
-    await runtime.runPromise(Effect.gen(function* () {
-      const registry = yield* AgentRegistry
-      yield* registry.register(makeCoderAgent({ id: "sel:coder" }))
-      yield* registry.register(makeAgent({ id: "sel:chat", capabilities: ["chat"] }))
-      const selected = yield* registry.select("请帮我写一段代码来实现排序算法")
-      expect(selected.id).toBe("sel:coder")
-    }))
-  })
-
-  it("select — 无匹配时返回 chat Agent", async () => {
-    const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
-    await runtime.runPromise(Effect.gen(function* () {
-      const registry = yield* AgentRegistry
-      yield* registry.register(makeAgent({ id: "sel:general", capabilities: ["chat"] }))
-      const selected = yield* registry.select("今天天气怎么样？")
-      expect(selected.capabilities).toContain("chat")
-    }))
-  })
-
-  it("select — 无可用 Agent 时报错", async () => {
-    const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
-    await expect(
-      runtime.runPromise(Effect.gen(function* () {
-        const registry = yield* AgentRegistry
-        yield* registry.register(makeAgent({ id: "sel:off", enabled: false }))
-        return yield* registry.select("hello")
-      }))
-    ).rejects.toThrow()
-  })
-
   it("clear — 清空所有 Agent 后 list 为空", async () => {
     const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
     await runtime.runPromise(Effect.gen(function* () {
@@ -291,27 +259,7 @@ describe("场景 1: Agent 注册表", () => {
     })
   })
 
-  it("detectIntent — 排序关键词触发 code-write 选择", async () => {
-    const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
-    await runtime.runPromise(Effect.gen(function* () {
-      const registry = yield* AgentRegistry
-      yield* registry.register(makeCoderAgent({ id: "di:coder" }))
-      yield* registry.register(makeAgent({ id: "di:chat", capabilities: ["chat"] }))
-      const selected = yield* registry.select("帮我写一个排序函数")
-      expect(selected.id).toBe("di:coder")
-    }))
-  })
 
-  it("detectIntent — 算法关键词触发 code-write 选择", async () => {
-    const runtime = ManagedRuntime.make(BaseAgentRegistryLive)
-    await runtime.runPromise(Effect.gen(function* () {
-      const registry = yield* AgentRegistry
-      yield* registry.register(makeCoderAgent({ id: "di:coder2" }))
-      yield* registry.register(makeAgent({ id: "di:chat2", capabilities: ["chat"] }))
-      const selected = yield* registry.select("请实现一个二分查找算法")
-      expect(selected.id).toBe("di:coder2")
-    }))
-  })
 })
 
 // ============================================================

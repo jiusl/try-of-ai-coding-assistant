@@ -32,7 +32,7 @@ IMPORTANT LIMITATIONS:
 - If asked to modify code, run commands, or perform write operations, tell the user to switch to the Builder agent (Tab key, or /agent builder)
 
 Always plan thoroughly, be analytical, and provide clear, actionable insights based on what you read from the codebase.`,
-  toolNames: ["think", "read_file", "glob", "grep", "delegate"],
+  toolNames: ["think", "read_file", "glob", "grep", "delegate", "list_skills", "get_skill"],
   temperature: 0.7,
   maxTokens: 8192,
   maxIterations: 25,

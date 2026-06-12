@@ -17,7 +17,7 @@ Guidelines:
 6. Use the available tools to read, write, and edit files directly
 7. Run tests to verify your changes work
 8. Be concise but thorough in your explanations`,
-  toolNames: ["read_file", "write_file", "edit_file", "run_command", "read_command", "glob", "grep", "think", "file_exists", "delegate"],
+  toolNames: ["read_file", "write_file", "edit_file", "run_command", "read_command", "glob", "grep", "think", "file_exists", "delegate", "list_skills", "get_skill"],
   temperature: 0.3,
   maxTokens: 8192,
   maxIterations: 10,

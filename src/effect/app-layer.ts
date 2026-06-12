@@ -15,7 +15,6 @@ import {
   SkillRegistryLive,
   SkillSystemLive,
   SkillInitLive,
-  SkillContextInjectorLive,
 } from "../skill/index.js"
 
 // 使用 Layer.empty + provideMerge 构建无依赖的闭合 Layer
@@ -27,7 +26,6 @@ export const AppLayer = Layer.empty.pipe(
   Layer.provideMerge(ToolRegistryLive),
   Layer.provideMerge(SkillInitLive),
   Layer.provideMerge(SkillSystemLive),
-  Layer.provideMerge(SkillContextInjectorLive),
   Layer.provideMerge(SkillRegistryLive),
   Layer.provideMerge(SkillLoaderLive),
   Layer.provideMerge(ProviderLive),
