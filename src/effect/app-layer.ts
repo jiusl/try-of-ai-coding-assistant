@@ -6,6 +6,7 @@ import { ConfigLive } from "../config/config.js"
 import { AuthLive } from "../provider/auth.js"
 import { ProviderLive } from "../provider/provider.js"
 import { SessionLive } from "../session/session.js"
+import { MemoryLive } from "../memory/memory.js"
 import { RuleEngineLive } from "../permission/rule-engine.js"
 import { PermissionLive } from "../permission/permission.js"
 import { ToolRegistryLive } from "../tool/index.js"
@@ -34,6 +35,7 @@ export const AppLayer = Layer.empty.pipe(
   Layer.provideMerge(ConfigLive),
   Layer.provideMerge(RuleEngineLive),
   Layer.provideMerge(SessionLive),
+  Layer.provideMerge(MemoryLive),
   Layer.provideMerge(DatabaseDefaultLive),
   Layer.provideMerge(EnvLive),
   Layer.provideMerge(FsLive)

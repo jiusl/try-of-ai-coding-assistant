@@ -30,6 +30,6 @@ Guidelines:
   toolNames: ["run_command", "read_command", "read_file", "edit_file", "write_file", "glob", "grep", "think", "file_exists", "delegate", "list_skills", "get_skill"],
   temperature: 0.2,
   maxTokens: 8192,
-  maxIterations: 25,
+  maxIterations: 50,
   enabled: true
 }

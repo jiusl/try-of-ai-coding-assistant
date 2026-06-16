@@ -10,6 +10,6 @@ export const TesterAgent: AgentConfig = {
   toolNames: ["run_command", "read_command", "read_file", "write_file", "edit_file", "glob", "think", "file_exists", "delegate", "list_skills", "get_skill"],
   temperature: 0.3,
   maxTokens: 8192,
-  maxIterations: 10,
+  maxIterations: 30,
   enabled: true
 }

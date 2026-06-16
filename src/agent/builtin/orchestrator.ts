@@ -37,6 +37,6 @@ export const OrchestratorAgent: AgentConfig = {
   ],
   temperature: 0.3,
   maxTokens: 8192,
-  maxIterations: 15,
+  maxIterations: 30,
   enabled: true
 }

@@ -11,6 +11,8 @@ import { ThinkTool } from "./think.js"
 import { FetchWebpageTool } from "./fetch.js"
 import { FileExistsTool } from "./file_exists.js"
 import { ListSkillsTool, GetSkillTool } from "./skill.js"
+import { RecallTool } from "./recall.js"
+import { RememberTool } from "./remember.js"
 
 /** 所有内置工具 */
 export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
@@ -26,6 +28,8 @@ export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
   FileExistsTool,
   ListSkillsTool,
   GetSkillTool,
+  RecallTool,
+  RememberTool,
 ]
 
 // 重新导出
@@ -42,5 +46,7 @@ export {
   FileExistsTool,
   ListSkillsTool,
   GetSkillTool,
+  RecallTool,
+  RememberTool,
 }
 export { DelegateJSONSchema, DELEGATE_TOOL_NAME } from "./delegate.js"

@@ -38,6 +38,6 @@ Limitations:
   toolNames: ["fetch_webpage", "read_file", "think", "list_skills", "get_skill"],
   temperature: 0.5,
   maxTokens: 8192,
-  maxIterations: 15,
+  maxIterations: 30,
   enabled: true
 }

@@ -19,6 +19,28 @@ import type {
 } from "../tool/index.js"
 import { Permission } from "../permission/permission.js"
 import type { Decision, Action } from "../permission/types.js"
+import { SkillRegistry } from "../skill/registry.js"
+import type { SkillRegistryService } from "../skill/registry.js"
+
+// ============================================================
+// Mock SkillRegistry — 隔离 Skill 层依赖
+// ============================================================
+
+const MockSkillRegistryLive = Layer.succeed(
+  SkillRegistry,
+  SkillRegistry.of({
+    register: (_skill: any) => Effect.void,
+    registerAll: (_skills: any[]) => Effect.void,
+    get: (_name: string) => Effect.fail({ _tag: "SkillNotFound", name: _name } as any),
+    list: (_options?: any) => Effect.succeed([]),
+    findByName: (_name: string) => Effect.succeed(undefined),
+    findByTags: (_tags: string[]) => Effect.succeed([]),
+    findByCategory: (_category: string) => Effect.succeed([]),
+    allTags: () => Effect.succeed([]),
+    allCategories: () => Effect.succeed([]),
+    clear: () => Effect.void,
+  } satisfies SkillRegistryService)
+)
 
 // ============================================================
 // Mock Permission — 隔离权限层，所有请求返回 allow
@@ -50,7 +72,10 @@ const MockPermissionLive = Layer.succeed(
 // Runtime 沙盒
 // ============================================================
 
-const TestLayer = ToolRegistryLive.pipe(Layer.provide(MockPermissionLive))
+const TestLayer = ToolRegistryLive.pipe(
+  Layer.provide(MockPermissionLive),
+  Layer.provide(MockSkillRegistryLive)
+)
 const TestRuntime = ManagedRuntime.make(TestLayer)
 const runTool = <A, E>(effect: Effect.Effect<A, E, ToolRegistry>) =>
   TestRuntime.runPromise(effect)

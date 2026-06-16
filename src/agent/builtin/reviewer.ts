@@ -10,6 +10,6 @@ export const ReviewerAgent: AgentConfig = {
   toolNames: ["read_file", "glob", "grep", "think", "delegate", "list_skills", "get_skill"],
   temperature: 0.4,
   maxTokens: 8192,
-  maxIterations: 5,
+  maxIterations: 30,
   enabled: true
 }

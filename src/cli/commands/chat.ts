@@ -21,7 +21,6 @@ const runChat = (sessionId: string, message: string, verbose: boolean = false) =
       onChunk: handler.onChunk,
       onToolCall: handler.onToolCall,
       onPhaseChange: handler.onPhaseChange,
-      maxIterations: 10
     })
 
     if (!handler.getContent()) {

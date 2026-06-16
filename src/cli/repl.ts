@@ -158,7 +158,6 @@ export class REPL {
           onChunk: handler.onChunk,
           onToolCall: handler.onToolCall,
           onPhaseChange: handler.onPhaseChange,
-          maxIterations: 10,
           ...(currentModel !== undefined ? { model: currentModel } : {})
         })
       }).pipe(
