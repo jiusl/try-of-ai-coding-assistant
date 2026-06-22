@@ -5,8 +5,8 @@ import { mergeDeep } from "remeda"
 
 /** 模型配置 */
 export interface ModelConfig {
-  /** 模型提供商: openai | anthropic | deepseek | ollama */
-  provider: "openai" | "anthropic" | "deepseek" | "ollama"
+  /** 模型提供商: openai | anthropic | deepseek | ollama | llama */
+  provider: "openai" | "anthropic" | "deepseek" | "ollama" | "llama"
   /** 模型名称 */
   model: string
   /** 温度参数 (0-2) */

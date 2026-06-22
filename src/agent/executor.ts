@@ -161,6 +161,7 @@ export const AgentExecutorLive = Layer.effect(
           yield* setPhase("thinking", { iteration: iterations })
           
           const response = yield* (provider.generate(currentMessages, {
+            ...(options.provider !== undefined ? { provider: options.provider as any } : {}),
             ...(options.model !== undefined ? { model: options.model } : {}),
             ...(agent.model !== undefined ? { model: agent.model } : {}),
             ...(agent.temperature !== undefined ? { temperature: agent.temperature } : {}),

@@ -24,6 +24,7 @@ export interface ToolCall {
 // ========== API 类型 ==========
 export interface GenerateOptions {
   model?: string
+  provider?: ProviderType
   temperature?: number
   maxTokens?: number
   tools?: ToolDefinition[]
@@ -50,7 +51,7 @@ export interface StreamChunk {
 }
 
 // ========== 配置类型 ==========
-export type ProviderType = "openai" | "anthropic" | "deepseek" | "ollama"
+export type ProviderType = "openai" | "anthropic" | "deepseek" | "ollama" | "llama"
 
 export interface ModelConfig {
   name: string

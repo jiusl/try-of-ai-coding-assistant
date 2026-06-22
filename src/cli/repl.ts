@@ -37,6 +37,7 @@ export class REPL {
   private verbose: boolean
   private currentAgentId: string = "builtin:chat"
   private currentModel: string | undefined = undefined  // undefined = use config default
+  private currentProvider: string | undefined = undefined  // undefined = auto-detect from model
   private processing: Promise<void> = Promise.resolve()
   private rl: readline.Interface
 
@@ -149,6 +150,7 @@ export class REPL {
     const sessionId = this.sessionId
     const currentAgentId = this.currentAgentId
     const currentModel = this.currentModel
+    const currentProvider = this.currentProvider
     const handler = createStreamHandler({ verbose: this.verbose })
 
     const result = await AppRuntime.runPromise(
@@ -158,7 +160,8 @@ export class REPL {
           onChunk: handler.onChunk,
           onToolCall: handler.onToolCall,
           onPhaseChange: handler.onPhaseChange,
-          ...(currentModel !== undefined ? { model: currentModel } : {})
+          ...(currentModel !== undefined ? { model: currentModel } : {}),
+          ...(currentProvider !== undefined ? { provider: currentProvider } : {})
         })
       }).pipe(
         Effect.catchAll((error) => {
@@ -202,6 +205,8 @@ export class REPL {
         console.log("  /agent [chat|builder] - Switch to Chat or Builder (no args = toggle)")
         console.log("  /model <name>    - Switch to a specific model (e.g. /model llama3.2)")
         console.log("  /model           - Show current model and reset to default")
+        console.log("  /provider <name> - Switch provider: openai, anthropic, deepseek, ollama, llama")
+        console.log("  /provider        - Show current provider and reset to auto-detect")
         console.log("  /exit, /quit     - Exit the chat")
         console.log("  /clear           - Clear the screen")
         console.log("  /verbose         - Toggle verbose mode")
@@ -214,6 +219,10 @@ export class REPL {
         console.log(chalk.bold("Models:"))
         console.log("  cloud models: gpt-4o, gpt-4o-mini, claude-sonnet-4-20250514, deepseek-chat")
         console.log("  local models: llama3.2, qwen2.5, mistral, gemma2, phi4, codellama")
+        console.log()
+        console.log(chalk.bold("Providers:"))
+        console.log("  openai | anthropic | deepseek | ollama | llama (local GGUF fallback)")
+        console.log("  Use /provider <name> to force a specific provider")
         console.log()
         break
 
@@ -233,6 +242,7 @@ export class REPL {
         console.log(`  ID: ${chalk.cyan(this.sessionId)}`)
         console.log(`  Agent: ${chalk.cyan(PRIMARY_AGENT_LABELS[this.currentAgentId] ?? this.currentAgentId)}`)
         console.log(`  Model: ${chalk.cyan(this.currentModel ?? "(default from config)")}`)
+        console.log(`  Provider: ${chalk.cyan(this.currentProvider ?? "(auto-detect from model)")}`)
         console.log()
         break
 
@@ -282,6 +292,28 @@ export class REPL {
             printSystemMessage(`Reset from ${chalk.yellow(wasModel)} to default config model`, "info")
           } else {
             printSystemMessage("Using default config model (no override set)", "info")
+          }
+        }
+        break
+      }
+
+      case "provider": {
+        const VALID_PROVIDERS = ["openai", "anthropic", "deepseek", "ollama", "llama"] as const
+        if (args.length > 0) {
+          const providerName = args[0]!.toLowerCase()
+          if (!VALID_PROVIDERS.includes(providerName as any)) {
+            printSystemMessage(`Invalid provider: ${args[0]}. Valid: ${VALID_PROVIDERS.join(", ")}`, "warning")
+            break
+          }
+          this.currentProvider = providerName
+          printSystemMessage(`Switched provider to: ${chalk.green(providerName)}`, "info")
+        } else {
+          if (this.currentProvider !== undefined) {
+            const was = this.currentProvider
+            this.currentProvider = undefined
+            printSystemMessage(`Reset from ${chalk.yellow(was)} to auto-detect (from model)`, "info")
+          } else {
+            printSystemMessage("Using auto-detect from model (no provider override set)", "info")
           }
         }
         break

@@ -19,6 +19,7 @@
     "commander": "^15.0.0",
     "effect": "^3.21.2",
     "micromatch": "^4.0.8",
+    "node-llama-cpp": "^3.18.1",
     "openai": "^6.42.0",
     "pdfjs-dist": "^4.0.379",
     "remeda": "^2.37.0",

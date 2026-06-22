@@ -80,6 +80,7 @@ export interface AgentExecutionOptions {
   userInput: string
   maxIterations?: number
   model?: string
+  provider?: string
   onChunk?: (chunk: string) => void
   onToolCall?: (toolCall: ToolCall, result?: ToolResult) => void
   onPhaseChange?: (state: ExecutionState) => void
