@@ -12,7 +12,11 @@ const WriteInputSchema = Schema.Struct({
 
 export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
   name: "write_file",
-  description: "Write content to a file. Supports absolute paths and relative paths. Creates parent directories if needed.",
+  description:
+    "Write content to a file. Supports absolute paths and relative paths. Creates parent directories if needed.\n" +
+    "Parameters:\n" +
+    "- filePath (required): Absolute or workspace-relative path to write to.\n" +
+    "- content (required): The full text content to write.",
   category: "file",
   permission: "write",
   sideEffect: "write",

@@ -145,6 +145,7 @@ export const printToolList = (tools: Array<{ name: string; description: string; 
 /** 创建流式输出处理器 */
 export const createStreamHandler = (options?: { verbose?: boolean }) => {
   let currentContent = ""
+  const verbose = options?.verbose ?? false
   
   return {
     onChunk: (chunk: string) => {
@@ -152,13 +153,36 @@ export const createStreamHandler = (options?: { verbose?: boolean }) => {
       currentContent += chunk
     },
     onToolCall: (toolCall: ToolCall, result?: ToolResult) => {
-      if (options?.verbose) {
+      if (verbose) {
         printToolCall(toolCall, result)
+      } else {
+        // 静默模式：只显示工具名，不显示参数/结果
+        console.log(theme.thinking(`  🔧 ${toolCall.function.name}`))
       }
     },
     onPhaseChange: (state: ExecutionState) => {
-      if (options?.verbose && state.phase !== "generating") {
-        printExecutionState(state)
+      if (verbose) {
+        if (state.phase !== "generating") {
+          printExecutionState(state)
+        }
+      } else {
+        switch (state.phase) {
+          case "initializing":
+            console.log(theme.info("🔄 Analyzing request..."))
+            break
+          case "generating":
+            if (state.content) {
+              process.stdout.write(state.content)
+              currentContent += state.content
+            }
+            break
+          case "done":
+            console.log()
+            break
+          case "error":
+            console.log(theme.error(`❌ Error: ${state.error || "Unknown error"}`))
+            break
+        }
       }
     },
     getContent: () => currentContent

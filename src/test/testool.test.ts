@@ -335,7 +335,7 @@ describe("场景 3: 工具执行", () => {
     await expect(runTool(program)).rejects.toThrow()
   })
 
-  it("execute — 非法 JSON 参数返回 ToolValidationError", async () => {
+  it("execute — 非法 JSON 参数返回 success=false", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* ToolRegistry
       const tool = makeTestTool()
@@ -352,10 +352,13 @@ describe("场景 3: 工具执行", () => {
       return yield* registry.execute(tc, testContext)
     })
 
-    await expect(runTool(program)).rejects.toThrow()
+    const result = await runTool(program)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("参数校验失败")
+    expect(result.content).toContain("JSON")
   })
 
-  it("execute — Schema 验证失败返回 ToolValidationError", async () => {
+  it("execute — Schema 验证失败返回 success=false", async () => {
     const program = Effect.gen(function* () {
       const registry = yield* ToolRegistry
       const tool = makeTestTool() // expects { message: string }
@@ -366,7 +369,9 @@ describe("场景 3: 工具执行", () => {
       return yield* registry.execute(tc, testContext)
     })
 
-    await expect(runTool(program)).rejects.toThrow()
+    const result = await runTool(program)
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("参数校验失败")
   })
 
   it("execute — 禁用的工具返回 success=false", async () => {
@@ -381,7 +386,7 @@ describe("场景 3: 工具执行", () => {
       const result = yield* registry.execute(tc, testContext)
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain("disabled")
+      expect(result.error).toContain("禁用")
     })
     await runTool(program)
   })
@@ -396,7 +401,7 @@ describe("场景 3: 工具执行", () => {
       const result = yield* registry.execute(tc, testContext)
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain("confirmation")
+      expect(result.error).toContain("确认")
     })
     await runTool(program)
   })

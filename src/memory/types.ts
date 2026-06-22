@@ -12,6 +12,10 @@ export interface MemoryEntry {
   importance: number
   /** 来源会话 ID（可选） */
   sourceSessionId?: string | undefined
+  /** 已被访问次数 */
+  accessCount: number
+  /** 最后访问时间 */
+  lastAccessedAt: Date
   createdAt: Date
   updatedAt: Date
 }
@@ -23,3 +27,24 @@ export interface CreateMemoryInput {
   importance?: number
   sourceSessionId?: string
 }
+
+/** 检索选项 */
+export interface RetrieveOptions {
+  query: string
+  limit?: number
+  /** 语义相似度权重 (0-1)，剩余权重分配给关键词匹配和重要度 */
+  semanticWeight?: number
+  /** 最小相似度阈值 */
+  minSimilarity?: number
+}
+
+/** 检索结果（带评分） */
+export interface ScoredMemory extends MemoryEntry {
+  /** 综合评分 0-1 */
+  score: number
+  /** 语义相似度（仅当 embedding 可用时） */
+  semanticScore: number | undefined
+}
+
+/** Embedding 向量 */
+export type EmbeddingVector = number[]

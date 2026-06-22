@@ -170,6 +170,55 @@ export const ToolRegistryLive = Layer.effect(
         return definitions
       })
     
+    /**
+     * 将 Schema 校验错误格式化为 LLM 友好的提示
+     * - 提取字段名、实际值、合法选项
+     * - 让 LLM 能根据提示自行修正参数
+     */
+    const formatValidationError = (raw: Record<string, unknown>, errorMessage: string): string => {
+      // Effect Schema 的错误格式类似：
+      // { readonly content: string; readonly category?: "preference" | ... }
+      // └─ ["category"]
+      //    └─ Expected "preference", actual "test"
+      const lines = errorMessage.split("\n").map(l => l.trim()).filter(Boolean)
+      const hints: string[] = []
+      
+      // 提取 "actual XXX" 行
+      for (const line of lines) {
+        const actualMatch = line.match(/^\s*Expected\s+"([^"]*)",\s*actual\s+"([^"]*)"/)
+        if (actualMatch) {
+          const [_, expected, actual] = actualMatch
+          hints.push(`期望 "${expected}"，实际传入 "${actual}"`)
+          continue
+        }
+        // 提取路径 ["fieldname"]
+        const pathMatch = line.match(/^\s*└─\s*\["([^"]+)"\]/)
+        if (pathMatch) {
+          hints.push(`出错的参数: "${pathMatch[1]}"`)
+        }
+      }
+      
+      // 收集所有合法枚举值
+      const enumValues = new Set<string>()
+      for (const line of lines) {
+        const enumMatch = line.match(/Expected\s+"([^"]+)"\s*,\s*actual/)
+        if (enumMatch) enumValues.add(enumMatch[1]!)
+      }
+      
+      let hint = ""
+      if (hints.length > 0) {
+        hint = "\n提示: " + hints.join("；")
+      }
+      if (enumValues.size > 0) {
+        hint += `\n合法选项: ${[...enumValues].map(v => `"${v}"`).join(", ")}`
+      }
+      
+      // 兜底：用简短摘要
+      const shortMessage = errorMessage.slice(0, 300)
+      const keys = Object.keys(raw).join(", ")
+      return `参数校验失败，请修正参数后重试。\n传入参数: { ${keys} }\n校验详情: ${shortMessage}${hint}`
+    }
+
     const validateAndParseInput = <TInput>(
       tool: ToolDefinition,
       argsJson: string
@@ -181,23 +230,27 @@ export const ToolRegistryLive = Layer.effect(
         } catch (error) {
           return yield* Effect.fail(new ToolValidationError({
             toolName: tool.name,
-            message: `JSON 参数格式无效: ${argsJson}`,
+            message: `JSON 格式无效，请确保参数是合法 JSON。原始输入: ${argsJson.slice(0, 200)}`,
             input: argsJson
           }))
         }
         
-        // 使用 Schema 验证（decodeUnknown 返回 Effect，通过 yield* 执行）
+        const rawObject = (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs))
+          ? rawArgs as Record<string, unknown>
+          : {}
+        
+        // 使用 Schema 验证
         const decoded = yield* Schema.decodeUnknown(tool.inputSchema)(rawArgs).pipe(
           Effect.mapError(parseError => new ToolValidationError({
             toolName: tool.name,
-            message: `参数校验失败: ${parseError.message}`,
+            message: formatValidationError(rawObject, parseError.message),
             input: rawArgs
           }))
         )
         
         return decoded as TInput
       })
-    
+
     const execute = (toolCall: ToolCall, context: ToolContext) =>
       Effect.gen(function* () {
         const tool = yield* get(toolCall.function.name)
@@ -213,10 +266,25 @@ export const ToolRegistryLive = Layer.effect(
           }
         }
         
-        // 解析并验证输入
-        const input = yield* validateAndParseInput(tool, toolCall.function.arguments)
+        // 解析并验证输入 —— 校验失败返回友好 ToolResult，不抛异常
+        const inputResult = yield* Effect.either(
+          validateAndParseInput(tool, toolCall.function.arguments)
+        )
+        if (inputResult._tag === "Left") {
+          const ve = inputResult.left instanceof ToolValidationError
+            ? inputResult.left
+            : new ToolValidationError({ toolName: tool.name, message: String(inputResult.left) })
+          return {
+            tool_call_id: toolCall.id,
+            role: "tool" as const,
+            content: ve.message,
+            success: false,
+            error: "参数校验失败"
+          }
+        }
+        const input = inputResult.right
         
-        // 权限检查 — 提取实际资源路径匹配规则
+        // 权限检查— 提取实际资源路径匹配规则
         const resource = extractResource(tool.name, input as Record<string, unknown>)
         const decision = yield* permission.check(tool.permission, resource)
         

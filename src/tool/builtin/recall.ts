@@ -12,10 +12,12 @@ const RecallInputSchema = Schema.Struct({
 export const RecallTool: ToolDefinition<typeof RecallInputSchema.Type, string> = {
   name: "recall",
   description:
-    "Recall memories from past conversations. " +
-    "ONLY use this tool when the user explicitly asks about something discussed in previous conversations, " +
-    "or refers to information from a past session. " +
-    "Provide a descriptive query about what you're looking for.",
+    "Recall relevant memories from past conversations. " +
+    "Use this tool when the information needed to answer the user's question " +
+    "cannot be obtained from the current session context. " +
+    "Provide a descriptive query about what you're looking for.\n" +
+    "Parameters:\n" +
+    "- query (required): Natural language search query describing what you want to recall.",
   category: "search",
   permission: "read",
   sideEffect: "read",
@@ -26,7 +28,7 @@ export const RecallTool: ToolDefinition<typeof RecallInputSchema.Type, string> =
   execute: (input, _context) =>
     Effect.gen(function* () {
       const memory = yield* Memory
-      const memories = yield* memory.retrieve(input.query).pipe(
+      const memories = yield* memory.search(input.query, 10).pipe(
         Effect.mapError(cause => new ToolExecutionError({
           toolName: "recall",
           message: `Failed to retrieve memories: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -40,7 +42,7 @@ export const RecallTool: ToolDefinition<typeof RecallInputSchema.Type, string> =
 
       const lines = memories.map(
         (m) =>
-          `- [${m.category}] ${m.content}` +
+          `- [${m.category}] (score: ${m.score.toFixed(2)}) ${m.content}` +
           (m.sourceSessionId ? `  (from session: ${m.sourceSessionId.slice(0, 8)}...)` : ""),
       )
       return (

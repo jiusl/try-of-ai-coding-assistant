@@ -16,7 +16,11 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
   description:
     "Replace the FIRST occurrence of oldString with newString in a file. " +
     "The oldString must appear exactly once for the replacement to succeed. " +
-    "Supports absolute paths and relative paths.",
+    "Supports absolute paths and relative paths.\n" +
+    "Parameters:\n" +
+    "- filePath (required): Absolute or workspace-relative path to the file.\n" +
+    "- oldString (required): The exact text to replace (must match precisely, including whitespace).\n" +
+    "- newString (required): The replacement text.",
   category: "file",
   permission: "write",
   sideEffect: "write",

@@ -13,7 +13,12 @@ const ReadInputSchema = Schema.Struct({
 
 export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
   name: "read_file",
-  description: "Read the contents of a file. Supports absolute paths (e.g. D:/projects/main.ts) and relative paths from workspace.",
+  description:
+    "Read the contents of a file. Supports absolute paths (e.g. D:/projects/main.ts) and relative paths from workspace.\n" +
+    "Parameters:\n" +
+    "- filePath (required): Absolute or workspace-relative file path.\n" +
+    "- offset (optional): Starting line number (0-based).\n" +
+    "- limit (optional): Maximum number of lines to read.",
   category: "file",
   permission: "read",
   sideEffect: "read",

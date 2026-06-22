@@ -13,7 +13,9 @@ export const FetchWebpageTool: ToolDefinition<typeof FetchInputSchema.Type, stri
     "Fetch and extract the main text content from a web page given its URL. " +
     "Returns the full extracted text — the Agent is responsible for determining " +
     "which parts are relevant to the current task. " +
-    "Use this tool to read documentation, API references, tutorials, blog posts, or any publicly accessible web content.",
+    "Use this tool to read documentation, API references, tutorials, blog posts, or any publicly accessible web content.\n" +
+    "Parameters:\n" +
+    "- url (required): Full URL to fetch (http:// or https://).",
   category: "search",
   permission: "read",
   sideEffect: "read",

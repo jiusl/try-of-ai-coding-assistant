@@ -43,7 +43,12 @@ export const glob = async (
 
 export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
   name: "glob",
-  description: "Find files matching a glob pattern (e.g., '**/*.ts'). Supports absolute paths for cwd.",
+  description:
+    "Find files matching a glob pattern (e.g., '**/*.ts'). Supports absolute paths for cwd.\n" +
+    "Parameters:\n" +
+    "- pattern (required): Glob pattern like '**/*.ts', 'src/**/*.test.ts'.\n" +
+    "- cwd (optional): Search root directory (default: workspace root).\n" +
+    "- ignore (optional): Array of glob patterns to exclude.",
   category: "search",
   permission: "read",
   sideEffect: "read",

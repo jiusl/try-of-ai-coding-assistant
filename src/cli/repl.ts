@@ -1,5 +1,5 @@
 // src/cli/repl.ts
-import { Effect, Option } from "effect"
+import { Effect, Fiber, Option } from "effect"
 import readline from "readline"
 import chalk from "chalk"
 import { AppRuntime } from "../effect/app-runtime.js"
@@ -39,6 +39,7 @@ export class REPL {
   private currentModel: string | undefined = undefined  // undefined = use config default
   private currentProvider: string | undefined = undefined  // undefined = auto-detect from model
   private processing: Promise<void> = Promise.resolve()
+  private currentTask: Fiber.RuntimeFiber<any, any> | null = null
   private rl: readline.Interface
 
   constructor(sessionId: string, options?: { verbose?: boolean }) {
@@ -50,6 +51,7 @@ export class REPL {
       prompt: this.makePrompt()
     })
     this.setupTabSwitching()
+    this.setupInterruptHandler()
   }
 
   // ====================================================
@@ -100,12 +102,47 @@ export class REPL {
   }
 
   // ====================================================
+  // Ctrl+C 中断处理 & /stop 命令
+  // ====================================================
+
+  private setupInterruptHandler(): void {
+    let sigintCount = 0
+    process.on("SIGINT", async () => {
+      if (this.currentTask) {
+        // 有正在运行的任务 → 中断它
+        console.log()
+        sigintCount = 1
+        await this.stopTask()
+      } else {
+        // 无运行任务 → 双重 Ctrl+C 退出
+        sigintCount++
+        if (sigintCount >= 2) {
+          console.log()
+          printSystemMessage("Goodbye!", "info")
+          process.exit(0)
+        } else {
+          console.log()
+          printSystemMessage("Press Ctrl+C again to exit, or /exit to quit", "info")
+          this.rl.prompt()
+        }
+      }
+    })
+  }
+
+  private async stopTask(): Promise<void> {
+    if (!this.currentTask) return
+    const task = this.currentTask
+    this.currentTask = null
+    await AppRuntime.runPromise(Fiber.interrupt(task))
+  }
+
+  // ====================================================
   // 启动 REPL
   // ====================================================
 
   start(): void {
     const label = PRIMARY_AGENT_LABELS[this.currentAgentId]!
-    printSystemMessage(`Chat session started. Current agent: ${label} (Tab to switch, /help for commands, /exit to quit)`, "info")
+    printSystemMessage(`Chat session started. Current agent: ${label} (Tab to switch, Ctrl+C to stop task, /help for commands, /exit to quit)`, "info")
     console.log()
 
     this.rl.prompt()
@@ -153,33 +190,49 @@ export class REPL {
     const currentProvider = this.currentProvider
     const handler = createStreamHandler({ verbose: this.verbose })
 
-    const result = await AppRuntime.runPromise(
-      Effect.gen(function* () {
-        const agentService = yield* AgentServiceTag
-        return yield* agentService.run(sessionId, currentAgentId, input, {
-          onChunk: handler.onChunk,
-          onToolCall: handler.onToolCall,
-          onPhaseChange: handler.onPhaseChange,
-          ...(currentModel !== undefined ? { model: currentModel } : {}),
-          ...(currentProvider !== undefined ? { provider: currentProvider } : {})
-        })
-      }).pipe(
-        Effect.catchAll((error) => {
-          if (error instanceof MaxIterationsExceededError) {
-            printSystemMessage(error.message, "error")
-          } else {
-            const msg = (error as any).message || String(error)
-            printSystemMessage(`Error: ${msg}`, "error")
-          }
-          return Effect.succeed(null)
-        })
-      )
+    const effect = Effect.gen(function* () {
+      const agentService = yield* AgentServiceTag
+      return yield* agentService.run(sessionId, currentAgentId, input, {
+        onChunk: handler.onChunk,
+        onToolCall: handler.onToolCall,
+        onPhaseChange: handler.onPhaseChange,
+        ...(currentModel !== undefined ? { model: currentModel } : {}),
+        ...(currentProvider !== undefined ? { provider: currentProvider } : {})
+      })
+    }).pipe(
+      Effect.catchAll((error) => {
+        if (error instanceof MaxIterationsExceededError) {
+          printSystemMessage(error.message, "error")
+        } else {
+          const msg = (error as any).message || String(error)
+          printSystemMessage(`Error: ${msg}`, "error")
+        }
+        return Effect.succeed(null)
+      })
     )
 
-    if (!handler.getContent() && result) {
-      console.log()
-      printAssistantMessage(result.content)
+    const fiber = AppRuntime.runFork(effect)
+    this.currentTask = fiber
+
+    try {
+      const result = await AppRuntime.runPromise(Fiber.join(fiber))
+      if (!handler.getContent() && result) {
+        console.log()
+        printAssistantMessage(result.content)
+      }
+    } catch (e: any) {
+      // Fiber.interrupt 触发的中断错误，静默处理
+      if (e && (e._tag === "Interrupt" || e.message?.includes("interrupt"))) {
+        console.log()
+        printSystemMessage("Task stopped", "warning")
+      } else {
+        const msg = e?.message || String(e)
+        printSystemMessage(`Error: ${msg}`, "error")
+      }
+    } finally {
+      this.currentTask = null
     }
+
     console.log()
   }
 
@@ -202,12 +255,14 @@ export class REPL {
         console.log()
         console.log(chalk.bold("Commands:"))
         console.log("  Tab              - Switch between Chat and Builder agents")
+        console.log("  Ctrl+C           - Stop current running task (press twice to exit)")
         console.log("  /agent [chat|builder] - Switch to Chat or Builder (no args = toggle)")
         console.log("  /model <name>    - Switch to a specific model (e.g. /model llama3.2)")
         console.log("  /model           - Show current model and reset to default")
         console.log("  /provider <name> - Switch provider: openai, anthropic, deepseek, ollama, llama")
         console.log("  /provider        - Show current provider and reset to auto-detect")
         console.log("  /exit, /quit     - Exit the chat")
+        console.log("  /stop            - Stop the current running task")
         console.log("  /clear           - Clear the screen")
         console.log("  /verbose         - Toggle verbose mode")
         console.log("  /session         - Show current session info")
@@ -229,6 +284,14 @@ export class REPL {
       case "clear":
         console.clear()
         printSystemMessage("Screen cleared", "info")
+        break
+
+      case "stop":
+        if (this.currentTask) {
+          await this.stopTask()
+        } else {
+          printSystemMessage("No task is currently running", "info")
+        }
         break
 
       case "verbose":

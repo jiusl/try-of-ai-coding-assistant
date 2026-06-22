@@ -17,7 +17,12 @@ export const RememberTool: ToolDefinition<typeof RememberInputSchema.Type, strin
     "Save an important fact or insight to long-term memory so it can be recalled in future conversations. " +
     "Use this when the user shares personal information (name, role, preferences, goals), " +
     "makes important decisions, or when you discover context worth remembering across sessions. " +
-    "Be selective — only save genuinely important, reusable information.",
+    "Be selective — only save genuinely important, reusable information. " +
+    "The system will automatically deduplicate similar memories.\n" +
+    "Parameters:\n" +
+    "- content (required): The memory content to save.\n" +
+    "- category (optional, default: \"general\"): One of \"preference\", \"fact\", \"context\", \"general\".\n" +
+    "- importance (optional, default: 0.5): A number between 0.0 (trivial) and 1.0 (critical).",
   category: "reasoning",
   permission: "read",
   sideEffect: "write",
@@ -32,7 +37,7 @@ export const RememberTool: ToolDefinition<typeof RememberInputSchema.Type, strin
         content: input.content,
         category: input.category ?? "general",
         importance: input.importance ?? 0.5,
-      }).pipe(
+      }, { autoDedup: true }).pipe(
         Effect.mapError(cause => new ToolExecutionError({
           toolName: "remember",
           message: `Failed to save memory: ${cause instanceof Error ? cause.message : String(cause)}`,

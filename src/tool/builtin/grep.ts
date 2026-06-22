@@ -19,7 +19,12 @@ export const GrepTool: ToolDefinition<typeof GrepInput.Type, Array<{ file: strin
     "Search for a regex pattern in file contents. " +
     "Use 'path' for the directory to search (absolute) or glob pattern (relative to workspace). " +
     "This is a convenience tool that combines file-finding and content-searching. " +
-    "For more control, use glob to find files first, then grep those files.",
+    "For more control, use glob to find files first, then grep those files.\n" +
+    "Parameters:\n" +
+    "- pattern (required): A regex pattern to search for (e.g. 'function|class', 'TODO|FIXME').\n" +
+    "- path (optional): Directory (absolute path) or glob pattern relative to workspace.\n" +
+    "- recursive (optional): Search subdirectories (default: false).\n" +
+    "- ignoreCase (optional): Case-insensitive search (default: false).",
   category: "search",
   permission: "read",
   sideEffect: "read",

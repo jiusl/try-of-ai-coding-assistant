@@ -10,7 +10,13 @@ const ThinkInputSchema = Schema.Struct({
 
 export const ThinkTool = {
   name: "think",
-  description: "Use this tool to think through a problem or plan a sequence of actions. This tool doesn't perform any actions, it's just for reasoning. The thought will be recorded but not used for output.",
+  description:
+    "Use this tool to think through a problem or plan a sequence of actions. " +
+    "This tool doesn't perform any actions, it's just for reasoning. " +
+    "The thought will be recorded but not used for output.\n" +
+    "Parameters:\n" +
+    "- thought (required): Your internal reasoning.\n" +
+    "- plan (optional): List of planned steps.",
   category: "reasoning" as const,
   permission: "read" as const,
   sideEffect: "read" as const,

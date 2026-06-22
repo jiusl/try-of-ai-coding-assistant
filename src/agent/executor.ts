@@ -6,6 +6,7 @@ import { Provider } from "../provider/provider.js"
 import { Session } from "../session/session.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { AgentRegistry } from "./registry.js"
+import { AutoMemory } from "../memory/auto-memory.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState, ExecutionPhase } from "./types.js"
 import { AgentExecutionError, MaxIterationsExceededError, NoToolsAvailableError } from "./types.js"
@@ -82,9 +83,10 @@ export const AgentExecutorLive = Layer.effect(
     const session = yield* Session
     const toolRegistry = yield* ToolRegistry
     const agentRegistry = yield* AgentRegistry
+    const autoMemory = yield* AutoMemory
 
-    const DEFAULT_MAX_ITERATIONS = 15
-    const DELEGATE_MAX_ITERATIONS = 8
+    const DEFAULT_MAX_ITERATIONS = 50
+    const DELEGATE_MAX_ITERATIONS = 30
     const MAX_DELEGATION_DEPTH = 3
     
     const executeInternal = (
@@ -342,6 +344,11 @@ export const AgentExecutorLive = Layer.effect(
         }
         
         yield* setPhase("done", { iteration: iterations, content: finalContent })
+        
+        // 方案C：自动从对话中提取长期记忆
+        yield* autoMemory.extract(userInput, finalContent, sessionId).pipe(
+          Effect.catchAll(() => Effect.succeed({ extracted: 0, memories: [] }))
+        )
         
         return {
           content: finalContent,
