@@ -358,38 +358,74 @@ export class Provider extends Context.Tag("Provider")<Provider, ProviderService>
 // 辅助函数
 // ====================================================
 
-const getProviderFromModel = (model?: string): Effect.Effect<ProviderType, ProviderErrorClass> =>
-  Effect.gen(function* () {
-    if (!model) {
-      return "openai" as ProviderType
-    }
-    const openaiModels = ["gpt-", "o1-", "o3-"]
-    const anthropicModels = ["claude-"]
-    const deepseekModels = ["deepseek-"]
-    const ollamaModels = [
-      "llama", "qwen", "mistral", "mixtral", "gemma", "phi",
-      "codellama", "yi-", "neural-chat", "solar", "dolphin",
-      "nous-hermes", "wizard", "openchat", "tinyllama", "stablelm",
-      "command-r", "orca", "falcon", "vicuna", "zephyr", "bakllava",
-      "llava", "nomic-", "mxbai-", "all-minilm", "bge-", "e5-",
-      "deepseek-r1", "deepseek-coder"
-    ]
-    for (const prefix of openaiModels) {
-      if (model.includes(prefix)) return "openai"
-    }
+/**
+ * 根据模型名推断 provider，同时接受 config 中配置的 provider 作为参考。
+ * 返回 { provider, warning } — warning 非空时表示路由存在异常需提醒用户。
+ */
+const resolveProvider = (
+  model?: string,
+  configProvider?: string
+): { provider: ProviderType; warning?: string } => {
+  if (!model) {
+    return { provider: (configProvider as ProviderType) || "openai" }
+  }
+
+  const openaiModels = ["gpt-", "o1-", "o3-"]
+  const anthropicModels = ["claude-"]
+  const deepseekModels = ["deepseek-"]
+  const ollamaModels = [
+    "llama", "qwen", "mistral", "mixtral", "gemma", "phi",
+    "codellama", "yi-", "neural-chat", "solar", "dolphin",
+    "nous-hermes", "wizard", "openchat", "tinyllama", "stablelm",
+    "command-r", "orca", "falcon", "vicuna", "zephyr", "bakllava",
+    "llava", "nomic-", "mxbai-", "all-minilm", "bge-", "e5-",
+    "deepseek-r1", "deepseek-coder"
+  ]
+
+  let detected: ProviderType | null = null
+
+  for (const prefix of openaiModels) {
+    if (model.includes(prefix)) { detected = "openai"; break }
+  }
+  if (!detected) {
     for (const prefix of anthropicModels) {
-      if (model.includes(prefix)) return "anthropic"
+      if (model.includes(prefix)) { detected = "anthropic"; break }
     }
+  }
+  if (!detected) {
     for (const prefix of deepseekModels) {
       if (model.includes("deepseek-r1") || model.includes("deepseek-coder")) continue
-      if (model.includes(prefix)) return "deepseek"
+      if (model.includes(prefix)) { detected = "deepseek"; break }
     }
+  }
+  if (!detected) {
     for (const prefix of ollamaModels) {
-      if (model.includes(prefix)) return "ollama"
+      if (model.includes(prefix)) { detected = "ollama"; break }
     }
-    // 兜底：使用本地 llama.cpp 推理
-    return "llama"
-  })
+  }
+
+  // 有明确的 config provider 时优先使用
+  if (configProvider && configProvider !== "llama") {
+    if (detected && detected !== configProvider) {
+      const warn = `模型名 "${model}" 看起来像 ${detected} 模型，但当前配置的 provider 是 ${configProvider}，将使用 ${configProvider} 调用。如遇错误请检查设置面板中的 provider 和模型名是否匹配。`
+      console.warn(`⚠️ [Provider] ${warn}`)
+      return { provider: configProvider as ProviderType, warning: warn }
+    }
+    if (!detected) {
+      // 未识别模型名但 config 指定了 provider，信任 config
+      return { provider: configProvider as ProviderType }
+    }
+    return { provider: detected }
+  }
+
+  if (!detected) {
+    const warn = `模型名 "${model}" 未被识别为任何已知云端 provider，将兜底使用本地 llama.cpp 推理。请检查模型名是否正确，或在设置面板中明确选择 provider。`
+    console.warn(`⚠️ [Provider] ${warn}`)
+    return { provider: "llama", warning: warn }
+  }
+
+  return { provider: detected }
+}
 
 // ====================================================
 // Provider 实现
@@ -773,26 +809,31 @@ export const ProviderLive = Layer.effect(
       Effect.gen(function* () {
         const mc = yield* getModelConfig()
         const targetModel = options?.model ?? mc.model
-        const provider = yield* getProviderFromModel(targetModel)
+        const { provider, warning } = resolveProvider(targetModel, mc.provider)
         const temperature = options?.temperature ?? mc.temperature ?? 0.7
         const maxTokens = options?.maxTokens ?? mc.maxTokens ?? 4096
         const tools = options?.tools
 
-        switch (provider) {
+        const result = yield* (() => { switch (provider) {
           case "openai":
           case "deepseek":
           case "ollama":
-            return yield* callOpenAICompatible(provider, messages, targetModel, temperature, maxTokens, tools)
+            return callOpenAICompatible(provider, messages, targetModel, temperature, maxTokens, tools)
           case "anthropic":
-            return yield* callAnthropic(messages, targetModel, temperature, maxTokens, tools)
+            return callAnthropic(messages, targetModel, temperature, maxTokens, tools)
           case "llama":
-            return yield* callLlama(messages, temperature, maxTokens)
+            return callLlama(messages, temperature, maxTokens)
           default:
-            return yield* Effect.fail(new ProviderErrorClass({
+            return Effect.fail(new ProviderErrorClass({
               provider: provider as ProviderType,
               message: `不支持的 Provider: ${provider}`
             }))
+        } })() as Effect.Effect<GenerateResponse, ProviderErrorClass | SDKNotInstalledErrorClass>
+
+        if (warning) {
+          return { ...result, warning }
         }
+        return result
       }).pipe(Effect.retry(retryPolicy))
 
     const stream = (messages: Message[], options?: GenerateOptions) =>
@@ -800,12 +841,12 @@ export const ProviderLive = Layer.effect(
         Effect.gen(function* () {
           const mc = yield* getModelConfig()
           const targetModel = options?.model ?? mc.model
-          const provider = yield* getProviderFromModel(targetModel)
+          const { provider, warning } = resolveProvider(targetModel, mc.provider)
           const temperature = options?.temperature ?? mc.temperature ?? 0.7
           const maxTokens = options?.maxTokens ?? mc.maxTokens ?? 4096
           const tools = options?.tools
 
-          switch (provider) {
+          const baseStream = (() => { switch (provider) {
             case "openai":
             case "deepseek":
             case "ollama":
@@ -819,7 +860,16 @@ export const ProviderLive = Layer.effect(
                 provider: provider as ProviderType,
                 message: `Streaming not supported for provider: ${provider}`
               }))
+          } })() as Stream.Stream<StreamChunk, ProviderErrorClass | SDKNotInstalledErrorClass>
+
+          // 如果有警告，在流开头插入 warning chunk
+          if (warning) {
+            return Stream.concat(
+              Stream.make({ type: "warning" as const, content: warning } as StreamChunk),
+              baseStream
+            )
           }
+          return baseStream
         })
       )
 

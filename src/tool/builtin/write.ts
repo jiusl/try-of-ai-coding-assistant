@@ -21,6 +21,7 @@ export const WriteTool: ToolDefinition<typeof WriteInput.Type, string> = {
   permission: "write",
   sideEffect: "write",
   safeToRetry: false,
+  sensitivity: "medium",
   inputSchema: WriteInputSchema,
   defaultEnabled: true,
   

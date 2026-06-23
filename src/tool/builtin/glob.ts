@@ -53,6 +53,7 @@ export const GlobTool: ToolDefinition<typeof GlobInput.Type, string[]> = {
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   inputSchema: GlobInputSchema,
   defaultEnabled: true,
   

@@ -26,9 +26,11 @@ const EmptyConfigLive = Layer.succeed(Config, {
   get: () => Effect.succeed({} as any),
   getvalue: <K>() => Effect.fail(new Error("not implemented")) as any,
   getModel: () => Effect.succeed({ provider: "openai" as const, model: "test" }),
+  setModel: (_model: any) => Effect.succeed(undefined),
   getPermissions: () => Effect.succeed([]),
   isAllowed: () => Effect.succeed(true),
   reload: () => Effect.succeed({} as any),
+  save: () => Effect.succeed(undefined),
 })
 
 const PermLayer = PermissionLive.pipe(

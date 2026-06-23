@@ -36,6 +36,7 @@ export const RunCommandTool: ToolDefinition<typeof RunCommandInputSchema.Type, s
   permission: "execute",
   sideEffect: "write",
   safeToRetry: false,
+  sensitivity: "high",
   inputSchema: RunCommandInputSchema,
   defaultEnabled: true,
   requireConfirm: true,

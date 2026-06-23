@@ -1,6 +1,6 @@
 // src/agent/types.ts
 import { Data } from "effect"
-import type { ToolCall, ToolResult } from "../tool/types.js"
+import type { ToolCall, ToolResult, ConfirmRequest } from "../tool/types.js"
 
 // ====================================================
 // Agent 能力类型
@@ -72,19 +72,27 @@ export interface ExecutionState {
   currentTool?: string
   currentToolCall?: ToolCall
   error?: string
+  /** 警告信息，如 provider 路由异常 */
+  warning?: string
 }
 
 /** 执行选项 */
 export interface AgentExecutionOptions {
   sessionId: string
   userInput: string
+  /** 指定要使用的 Agent ID（覆盖会话绑定） */
+  agentId?: string
   maxIterations?: number
   model?: string
   provider?: string
   onChunk?: (chunk: string) => void
   onToolCall?: (toolCall: ToolCall, result?: ToolResult) => void
   onPhaseChange?: (state: ExecutionState) => void
+  /** 需要用户确认时回调（在工具执行前触发，前端应展示确认对话框） */
+  onRequireConfirm?: (req: ConfirmRequest) => void
 }
+
+export type { ConfirmRequest }
 
 /** 执行结果 */
 export interface AgentExecutionResult {
@@ -98,6 +106,8 @@ export interface AgentExecutionResult {
     completionTokens: number
     totalTokens: number
   }
+  /** 警告信息，如 provider 路由异常 */
+  warning?: string
 }
 
 // ====================================================

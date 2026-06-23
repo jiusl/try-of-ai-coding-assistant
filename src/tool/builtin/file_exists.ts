@@ -31,6 +31,7 @@ export const FileExistsTool: ToolDefinition<typeof FileExistsInputSchema.Type, F
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   inputSchema: FileExistsInputSchema,
   defaultEnabled: true,
 

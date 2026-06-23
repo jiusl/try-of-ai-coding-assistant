@@ -6,6 +6,7 @@ import { chatCommand } from "./commands/chat.js"
 import { runCommand } from "./commands/run.js"
 import { agentCommand } from "./commands/agent.js"
 import { toolCommand } from "./commands/tool.js"
+import { webCommand } from "./commands/web.js"
 
 const packageJson = {
   name: "try",
@@ -27,3 +28,4 @@ cli.addCommand(chatCommand)
 cli.addCommand(runCommand)
 cli.addCommand(agentCommand)
 cli.addCommand(toolCommand)
+cli.addCommand(webCommand)

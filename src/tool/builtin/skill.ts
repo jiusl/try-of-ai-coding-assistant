@@ -24,6 +24,7 @@ export const ListSkillsTool: ToolDefinition<typeof ListSkillsInputSchema.Type, s
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   defaultEnabled: true,
   inputSchema: ListSkillsInputSchema,
 
@@ -65,6 +66,7 @@ export const GetSkillTool: ToolDefinition<typeof GetSkillInputSchema.Type, strin
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   defaultEnabled: true,
   inputSchema: GetSkillInputSchema,
 

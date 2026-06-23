@@ -25,6 +25,7 @@ export const EditTool: ToolDefinition<typeof EditInput.Type, string> = {
   permission: "write",
   sideEffect: "write",
   safeToRetry: false,
+  sensitivity: "medium",
   inputSchema: EditInputSchema,
   defaultEnabled: true,
   

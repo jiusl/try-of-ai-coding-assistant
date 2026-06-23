@@ -500,9 +500,11 @@ describe("Provider 模型路由逻辑", () => {
           temperature: 0.7,
           maxTokens: 4096
         }),
+        setModel: (_model: any) => Effect.succeed(undefined),
         getPermissions: () => Effect.succeed([]),
         isAllowed: () => Effect.succeed(true),
-        reload: () => Effect.succeed({} as any)
+        reload: () => Effect.succeed({} as any),
+        save: () => Effect.succeed(undefined),
       })
 
     it("无 API Key 时 isAvailable 应返回 false (集成)", async () => {

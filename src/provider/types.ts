@@ -35,6 +35,8 @@ export interface GenerateResponse {
   model: string
   usage: TokenUsage
   tool_calls?: ToolCall[]
+  /** 当 provider 路由出现异常（如兜底到本地模型）时的警告信息 */
+  warning?: string
 }
 
 export interface TokenUsage {
@@ -44,7 +46,7 @@ export interface TokenUsage {
 }
 
 export interface StreamChunk {
-  type: "content" | "tool_call" | "done" | "error"
+  type: "content" | "tool_call" | "done" | "error" | "warning"
   content?: string
   tool_call?: ToolCall
   error?: Error

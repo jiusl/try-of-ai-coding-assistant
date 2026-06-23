@@ -22,6 +22,7 @@ export const RecallTool: ToolDefinition<typeof RecallInputSchema.Type, string> =
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   defaultEnabled: true,
   inputSchema: RecallInputSchema,
 

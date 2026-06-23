@@ -13,6 +13,15 @@ export type ToolCategory =
   | "search"    // 搜索操作
   | "reasoning" // 推理/思考
 
+/**
+ * 工具敏感度等级
+ * - low:  只读操作，无副作用，workspace 范围内（自动通过）
+ * - medium: 跨边界读取或 workspace 内写入（会话级信任可自动通过）
+ * - high:    外部写入/删除/网络请求/任意命令执行（每次需确认）
+ * - critical: 系统级破坏性操作如 rm/chmod/格式化（每次需确认 + 二次确认）
+ */
+export type SensitivityLevel = "low" | "medium" | "high" | "critical"
+
 /** 工具定义（使用 Schema 驱动）*/
 export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   /** 工具唯一标识 */
@@ -31,6 +40,8 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   safeToRetry: boolean
   /** 是否需要用户确认（覆盖 permission 默认行为） */
   requireConfirm?: boolean
+  /** 敏感度等级（驱动前端确认流程） */
+  sensitivity: SensitivityLevel
   /** 是否在所有 Agent 中默认启用 */
   defaultEnabled?: boolean
   /** 执行函数 */
@@ -63,6 +74,17 @@ export interface ToolResult {
   content: string
   success: boolean
   error?: string
+}
+
+/** 确认请求（从前端确认流程，敏感工具执行前发出） */
+export interface ConfirmRequest {
+  sessionId: string
+  toolCallId: string
+  toolName: string
+  target: string
+  arguments: string
+  sensitivity: string
+  reason: string
 }
 
 // ====================================================

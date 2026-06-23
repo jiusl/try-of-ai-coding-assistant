@@ -20,6 +20,7 @@ export const FetchWebpageTool: ToolDefinition<typeof FetchInputSchema.Type, stri
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "medium",
   inputSchema: FetchInputSchema,
   defaultEnabled: true,
 

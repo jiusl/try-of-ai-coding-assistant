@@ -29,6 +29,7 @@ export const GrepTool: ToolDefinition<typeof GrepInput.Type, Array<{ file: strin
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   inputSchema: GrepInputSchema,
   defaultEnabled: true,
   

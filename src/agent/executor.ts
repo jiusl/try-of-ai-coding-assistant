@@ -5,6 +5,7 @@ import type { ToolCall, ToolResult, ToolContext } from "../tool/types.js"
 import { Provider } from "../provider/provider.js"
 import { Session } from "../session/session.js"
 import { ToolRegistry } from "../tool/registry.js"
+import { ConfirmationStore } from "../tool/confirmation.js"
 import { AgentRegistry } from "./registry.js"
 import { AutoMemory } from "../memory/auto-memory.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
@@ -19,13 +20,13 @@ export interface AgentExecutorService {
   readonly execute: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError>
+  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore>
   
   /** 执行 Agent（流式，推送执行状态）*/
   readonly executeStream: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Stream.Stream<ExecutionState, AgentExecutionError | MaxIterationsExceededError>
+  ) => Stream.Stream<ExecutionState, AgentExecutionError | MaxIterationsExceededError, ConfirmationStore>
 }
 
 export class AgentExecutor extends Context.Tag("AgentExecutor")<
@@ -94,7 +95,7 @@ export const AgentExecutorLive = Layer.effect(
       options: AgentExecutionOptions,
       stateQueue?: Queue.Queue<ExecutionState>,
       delegationChain?: Set<string>
-    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError> => {
+    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore> => {
       const {
         sessionId,
         userInput,
@@ -153,6 +154,7 @@ export const AgentExecutorLive = Layer.effect(
         let currentMessages = yield* buildMessages()
         const initialMessageCount = currentMessages.length  // 追踪初始消息数，用于超限时持久化增量
         let iterations = 0
+        let executionWarning: string | undefined = undefined  // 捕获 provider 路由警告
         const allToolCalls: ToolCall[] = []
         const allToolResults: ToolResult[] = []
         let finalContent = ""
@@ -170,6 +172,12 @@ export const AgentExecutorLive = Layer.effect(
             ...(agent.maxTokens !== undefined ? { maxTokens: agent.maxTokens } : {}),
             ...(allToolDefs.length > 0 ? { tools: allToolDefs as any } : {}),
           }) as Effect.Effect<any, Error>)
+
+          // 捕获首轮 provider 路由警告
+          if (response.warning && !executionWarning) {
+            executionWarning = response.warning
+            yield* setPhase("thinking", { iteration: iterations, warning: response.warning })
+          }
           
           if (response.usage) {
             totalTokens.promptTokens += response.usage.promptTokens
@@ -201,9 +209,71 @@ export const AgentExecutorLive = Layer.effect(
             // 执行普通工具调用
             if (regularCalls.length > 0) {
               const toolContext = buildToolContext(sessionId, workspaceRoot)
-              const results = yield* toolRegistry.executeBatch(regularCalls, toolContext)
-              for (let i = 0; i < regularCalls.length; i++) {
-                resultMap.set(regularCalls[i]!.id, results[i]!)
+
+              // --- 敏感度确认 ---
+              // 获取所有涉及工具的敏感度，筛选需要确认的
+              let approvedCalls = regularCalls
+              const highSensitivityCalls: ToolCall[] = []
+
+              for (const tc of regularCalls) {
+                const toolResult = yield* Effect.either(toolRegistry.get(tc.function.name))
+                if (toolResult._tag === "Right") {
+                  const tool = toolResult.right
+                  if (tool.sensitivity === "high" || tool.sensitivity === "critical") {
+                    highSensitivityCalls.push(tc)
+                  }
+                }
+              }
+
+              if (highSensitivityCalls.length > 0) {
+                const confirmationStore = yield* ConfirmationStore
+
+                // 逐个确认（同一会话同时只有一个确认）
+                for (const tc of highSensitivityCalls) {
+                  let argsPreview = ""
+                  try { argsPreview = tc.function.arguments.slice(0, 200) } catch { /* ignore */ }
+
+                  const reason = tc.function.name === "run_command"
+                    ? `执行命令: ${argsPreview}`
+                    : `工具 "${tc.function.name}" 需要用户确认才能执行`
+
+                  const confirmReq = {
+                    sessionId,
+                    toolCallId: tc.id,
+                    toolName: tc.function.name,
+                    target: argsPreview,
+                    arguments: argsPreview,
+                    sensitivity: tc.function.name === "run_command" ? "high" : "high",
+                    reason,
+                  }
+
+                  // 通知前端显示确认对话框
+                  options.onRequireConfirm?.(confirmReq)
+
+                  // 阻塞等待用户决定
+                  const approved = yield* confirmationStore.request(confirmReq)
+
+                  if (!approved) {
+                    // 用户拒绝 → 从执行列表中移除
+                    approvedCalls = approvedCalls.filter(c => c.id !== tc.id)
+                    // 生成拒绝结果
+                    resultMap.set(tc.id, {
+                      tool_call_id: tc.id,
+                      role: "tool" as const,
+                      content: `用户拒绝执行工具 "${tc.function.name}"`,
+                      success: false,
+                      error: "用户拒绝执行",
+                    })
+                  }
+                }
+              }
+
+              // 执行已批准的工具
+              if (approvedCalls.length > 0) {
+                const results = yield* toolRegistry.executeBatch(approvedCalls, toolContext)
+                for (let i = 0; i < approvedCalls.length; i++) {
+                  resultMap.set(approvedCalls[i]!.id, results[i]!)
+                }
               }
             }
             
@@ -350,7 +420,7 @@ export const AgentExecutorLive = Layer.effect(
           Effect.catchAll(() => Effect.succeed({ extracted: 0, memories: [] }))
         )
         
-        return {
+        const result: AgentExecutionResult = {
           content: finalContent,
           toolCalls: allToolCalls,
           toolResults: allToolResults,
@@ -358,6 +428,10 @@ export const AgentExecutorLive = Layer.effect(
           durationMs: Date.now() - startTime,
           tokensUsed: totalTokens,
         }
+        if (executionWarning !== undefined) {
+          result.warning = executionWarning
+        }
+        return result
       }).pipe(
         Effect.mapError((err: unknown) => {
           if (err instanceof AgentExecutionError) return err
@@ -372,7 +446,7 @@ export const AgentExecutorLive = Layer.effect(
     const execute = (
       agent: AgentConfig,
       options: AgentExecutionOptions
-    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError> =>
+    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore> =>
       executeInternal(agent, options)
     
     const executeStream = (

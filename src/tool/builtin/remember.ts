@@ -27,6 +27,7 @@ export const RememberTool: ToolDefinition<typeof RememberInputSchema.Type, strin
   permission: "read",
   sideEffect: "write",
   safeToRetry: true,
+  sensitivity: "low",
   defaultEnabled: true,
   inputSchema: RememberInputSchema,
 

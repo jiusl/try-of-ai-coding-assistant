@@ -23,6 +23,7 @@ export const ReadTool: ToolDefinition<typeof ReadInput.Type, string> = {
   permission: "read",
   sideEffect: "read",
   safeToRetry: true,
+  sensitivity: "low",
   inputSchema: ReadInputSchema,
   defaultEnabled: true,
   

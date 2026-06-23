@@ -78,6 +78,7 @@ export const AgentServiceLive = Layer.effect(
       ...(options?.onChunk ? { onChunk: options.onChunk } : {}),
       ...(options?.onToolCall ? { onToolCall: options.onToolCall } : {}),
       ...(options?.onPhaseChange ? { onPhaseChange: options.onPhaseChange } : {}),
+      ...(options?.onRequireConfirm ? { onRequireConfirm: options.onRequireConfirm } : {}),
     })
     
     const run = (
@@ -133,17 +134,23 @@ export const AgentServiceLive = Layer.effect(
       options?: Partial<Omit<AgentExecutionOptions, "sessionId" | "userInput">>
     ) =>
       Effect.gen(function* () {
-        // 优先使用会话绑定的 Agent（需验证仍然可用）
-        const currentAgentOpt = yield* getCurrentAgent(sessionId)
-        
         let agent: AgentConfig
-        if (Option.isSome(currentAgentOpt) && currentAgentOpt.value.enabled !== false) {
-          agent = currentAgentOpt.value
-        } else {
-          // 默认使用 builtin:chat
-          agent = yield* registry.get("builtin:chat")
-          // 保存选择
+
+        // 优先使用请求中显式指定的 agentId
+        if (options?.agentId) {
+          agent = yield* registry.get(options.agentId)
           yield* Ref.update(sessionAgents, map => map.set(sessionId, agent.id))
+        } else {
+          // 其次使用会话绑定的 Agent（需验证仍然可用）
+          const currentAgentOpt = yield* getCurrentAgent(sessionId)
+
+          if (Option.isSome(currentAgentOpt) && currentAgentOpt.value.enabled !== false) {
+            agent = currentAgentOpt.value
+          } else {
+            // 默认使用 builtin:chat
+            agent = yield* registry.get("builtin:chat")
+            yield* Ref.update(sessionAgents, map => map.set(sessionId, agent.id))
+          }
         }
         
         const executionOptions = makeOptions(sessionId, userInput, options)

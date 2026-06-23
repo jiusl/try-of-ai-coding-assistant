@@ -21,6 +21,7 @@ export const ThinkTool = {
   permission: "read" as const,
   sideEffect: "read" as const,
   safeToRetry: true,
+  sensitivity: "low" as const,
   inputSchema: ThinkInputSchema,
   defaultEnabled: true,
   
