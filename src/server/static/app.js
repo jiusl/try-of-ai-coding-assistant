@@ -784,7 +784,15 @@ function sendSSERequest(message, aiMsgEl) {
     let buffer = "";
     function processChunk() {
       reader.read().then(({done, value}) => {
-        if (done) { finishStreaming(sessionId, fullContent); return; }
+        if (done) {
+          // 流已完全消费：先完成收尾，再清除控制器
+          finishStreaming(sessionId, fullContent);
+          const bgDone = state.sessionCache[sessionId];
+          if (bgDone && bgDone.abortController === controller) {
+            bgDone.abortController = null;
+          }
+          return;
+        }
         buffer += decoder.decode(value, {stream:true});
         const lines = buffer.split("\n");
         buffer = lines.pop()||"";
@@ -829,10 +837,22 @@ function handleSSEEvent(type, payload, sessionId, fullContent) {
       bg.segments.push({ type: "tool", payload });
       appendToolCall(aiMsgEl, payload);
       return fullContent;
-    case "phase":
-      setStatus("processing",`执行中：${payload.phase||"思考中"}…`);
+    case "phase": {
+      const phaseLabels = {
+        initializing: "初始化中",
+        thinking: "思考中",
+        calling_tool: "调用工具中",
+        awaiting_confirmation: "等待确认",
+        processing: "处理中",
+        generating: "生成回复中",
+        done: "完成",
+        error: "出错",
+      };
+      const label = phaseLabels[payload.phase] || payload.phase || "思考中";
+      setStatus("processing", `执行中：${label}…`);
       if (payload.warning) appendWarning(payload.warning, aiMsgEl);
       return fullContent;
+    }
     case "done":
       if (payload.sessionId&&!state.currentSessionId) state.currentSessionId=payload.sessionId;
       if (payload.warning) appendWarning(payload.warning, aiMsgEl);
@@ -854,7 +874,11 @@ function finishStreaming(sessionId, content) {
 
   bg.isProcessing = false;
   bg.isStreaming = false;
-  bg.abortController = null;
+  // 注意：不在此处清空 abortController！
+  // 因为 processChunk 递归循环依赖 abortController===controller 来判断是否继续读取。
+  // 如果此处清空，SSE "done" 事件处理后会立即断掉循环，
+  // 导致 ReadableStream 的 close 信号（reader.read 返回 done=true）永远无法被消费。
+  // abortController 的清空统一由 stopStreaming / handleStreamError 负责。
 
   // 将最终内容写入消息数组
   if (content && bg.messages) {
@@ -912,6 +936,12 @@ function stopStreaming() {
   if (state.currentSessionId) {
     const bg = state.sessionCache[state.currentSessionId];
     if (bg) { bg.abortController = null; bg.isProcessing = false; bg.isStreaming = false; }
+    // 通知后端取消该会话的待确认请求，避免旧 fiber 永久阻塞
+    fetch("/api/chat/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: state.currentSessionId }),
+    }).catch(() => { /* 静默忽略网络错误 */ });
   }
   state.isStreaming = false; state.isProcessing = false;
   setStatus("online","已停止"); dom.btnSend.style.display="flex"; dom.btnStop.style.display="none";

@@ -202,4 +202,25 @@ export function registerChatRoutes(router: Router): void {
     )
     return response
   })
+
+  // 取消会话的待确认请求（用户点击停止按钮时调用）
+  router.post("/api/chat/cancel", async (ctx) => {
+    const body = await parseJsonBody<{ sessionId: string }>(ctx.request)
+    if (!body.sessionId) {
+      return errorResponse("缺少 sessionId", 400)
+    }
+    const program = Effect.gen(function* () {
+      const store = yield* ConfirmationStore
+      yield* store.cancelSession(body.sessionId)
+      return successResponse({ sessionId: body.sessionId, cancelled: true })
+    })
+    const response: Response = await AppRuntime.runPromise(
+      program.pipe(
+        Effect.catchAll((error: Error) =>
+          Effect.succeed(errorResponse(error.message, 500))
+        )
+      )
+    )
+    return response
+  })
 }

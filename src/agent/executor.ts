@@ -228,6 +228,12 @@ export const AgentExecutorLive = Layer.effect(
               if (highSensitivityCalls.length > 0) {
                 const confirmationStore = yield* ConfirmationStore
 
+                // 进入等待确认阶段，让前端显示更清晰的状态
+                yield* setPhase("awaiting_confirmation", {
+                  iteration: iterations,
+                  currentTool: highSensitivityCalls[0]!.function.name,
+                })
+
                 // 逐个确认（同一会话同时只有一个确认）
                 for (const tc of highSensitivityCalls) {
                   let argsPreview = ""

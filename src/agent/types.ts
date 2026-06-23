@@ -56,13 +56,14 @@ export interface AgentConfig {
 
 /** 执行阶段 */
 export type ExecutionPhase = 
-  | "initializing"   // 初始化
-  | "thinking"       // AI 思考中
-  | "calling_tool"   // 调用工具
-  | "processing"     // 处理结果
-  | "generating"     // 生成响应
-  | "done"           // 完成
-  | "error"          // 错误
+  | "initializing"        // 初始化
+  | "thinking"            // AI 思考中
+  | "calling_tool"        // 调用工具
+  | "awaiting_confirmation" // 等待用户确认
+  | "processing"          // 处理结果
+  | "generating"          // 生成响应
+  | "done"                // 完成
+  | "error"               // 错误
 
 /** 执行状态（用于流式推送）*/
 export interface ExecutionState {
