@@ -112,9 +112,19 @@ function handleChatStream(sessionId: string, message: string, agentId?: string):
 async function handleChatSync(sessionId: string, message: string, agentId?: string): Promise<Response> {
   const program = Effect.gen(function* () {
     const agentService = yield* AgentServiceTag
+    const confirmationStore = yield* ConfirmationStore
 
+    // 同步 API 无法弹出确认对话框 → 高敏感操作自动拒绝
     const result = yield* agentService.runAuto(sessionId, message, {
       ...(agentId ? { agentId } : {}),
+      onRequireConfirm: (req) => {
+        // 同步模式自动拒绝，避免 Deferred 永久阻塞
+        AppRuntime.runFork(
+          Effect.gen(function* () {
+            yield* confirmationStore.resolve(req.sessionId, false)
+          })
+        )
+      },
     })
 
     return successResponse({

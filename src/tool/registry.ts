@@ -298,20 +298,9 @@ export const ToolRegistryLive = Layer.effect(
           }
         }
         
-        // 如果需要用户确认
-        if (tool.requireConfirm) {
-          // TODO: 触发用户确认流程
-          // 简化版：返回 ask 状态
-          return {
-            tool_call_id: toolCall.id,
-            role: "tool" as const,
-            content: `操作需要用户确认: ${tool.name}`,
-            success: false,
-            error: "等待用户确认"
-          }
-        }
-        
         // 执行工具（注入 SkillRegistry 供需要它的工具使用）
+        // 注意：高敏感工具的确认流程由 executor 层的 ConfirmationStore 统一处理，
+        // 此处不再做 tool.requireConfirm 检查，避免双重拦截。
         const result = yield* Effect.either(
           (tool.execute(input as never, context) as unknown as Effect.Effect<unknown, Error>).pipe(
             Effect.provideService(SkillRegistry, skillRegistry)

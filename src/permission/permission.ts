@@ -89,10 +89,10 @@ export const DEFAULT_RULES: PermissionRule[] = [
   {
     id: "execute-dev-commands-global",
     action: "execute",
-    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *}",
+    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *,ls *,dir *,cat *,type *,echo *,cd *,mkdir *,copy *,cp *,mv *,ren *,touch *,which *,where *,whoami *,pwd *,printenv *,env *,rm *,rmdir *,chmod *,chown *,curl *,wget *,tar *,zip *,unzip *,gzip *,gunzip *,find *,grep *,sed *,awk *,sort *,uniq *,wc *,head *,tail *,tee *,ping *,traceroute *,nslookup *,ssh *,scp *,rsync *,systeminfo *,tasklist *,taskkill *,netstat *,ipconfig *,set *,export *}",
     decision: "allow",
     priority: 1,
-    description: "Allow common development commands"
+    description: "Allow common development and shell commands"
   },
   {
     id: "shell-dev-commands-global",

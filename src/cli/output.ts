@@ -1,6 +1,10 @@
 // src/cli/output.ts
 import chalk from "chalk"
-import type { ExecutionState } from "../agent/types.js"
+import readline from "readline"
+import { Effect } from "effect"
+import { AppRuntime } from "../effect/app-runtime.js"
+import { ConfirmationStore } from "../tool/confirmation.js"
+import type { ExecutionState, ConfirmRequest } from "../agent/types.js"
 import type { ToolCall, ToolResult } from "../tool/types.js"
 
 // ====================================================
@@ -186,5 +190,49 @@ export const createStreamHandler = (options?: { verbose?: boolean }) => {
       }
     },
     getContent: () => currentContent
+  }
+}
+
+// ====================================================
+// 高敏感操作确认处理器（CLI 终端交互）
+// ====================================================
+
+/**
+ * 为 CLI 模式创建 onRequireConfirm 回调。
+ * 当 executor 检测到高敏感工具（如 run_command）时，
+ * 在终端打印确认提示，等待用户输入 y/n 后 resolve ConfirmationStore。
+ */
+export const createConfirmHandler = () => {
+  return (req: ConfirmRequest): void => {
+    // 打印确认提示
+    console.log()
+    console.log(chalk.yellow.bold("╔══════════════════════════════════════╗"))
+    console.log(chalk.yellow.bold("║  ⚠️  高敏感操作需要确认               ║"))
+    console.log(chalk.yellow.bold("╚══════════════════════════════════════╝"))
+    console.log(chalk.white(`  工具:     ${chalk.cyan(req.toolName)}`))
+    console.log(chalk.white(`  参数:     ${chalk.gray(req.arguments.slice(0, 200))}`))
+    console.log(chalk.white(`  原因:     ${chalk.gray(req.reason)}`))
+    console.log()
+
+    // 异步读取用户输入，不阻塞 executor fiber 的通知阶段
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
+
+    rl.question(chalk.yellow("  是否允许执行？(y/n): "), (answer) => {
+      rl.close()
+      const approved = answer.toLowerCase() === "y" || answer.toLowerCase() === "yes"
+
+      // 通过 Effect 调用 ConfirmationStore.resolve 解除 Deferred 阻塞
+      AppRuntime.runPromise(
+        Effect.gen(function* () {
+          const store = yield* ConfirmationStore
+          yield* store.resolve(req.sessionId, approved)
+        })
+      ).catch((err) => {
+        console.error(chalk.red(`确认处理失败: ${err}`))
+      })
+    })
   }
 }

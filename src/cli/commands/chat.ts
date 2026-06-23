@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { AgentServiceTag } from "../../agent/index.js"
 import { MaxIterationsExceededError } from "../../agent/types.js"
-import { createStreamHandler, printAssistantMessage, printSystemMessage } from "../output.js"
+import { createStreamHandler, createConfirmHandler, printAssistantMessage, printSystemMessage } from "../output.js"
 import { REPL } from "../repl.js"
 
 // ====================================================
@@ -16,11 +16,13 @@ const runChat = (sessionId: string, message: string, verbose: boolean = false) =
     const agentService = yield* AgentServiceTag
 
     const handler = createStreamHandler({ verbose })
+    const onRequireConfirm = createConfirmHandler()
 
     const result = yield* agentService.runAuto(sessionId, message, {
       onChunk: handler.onChunk,
       onToolCall: handler.onToolCall,
       onPhaseChange: handler.onPhaseChange,
+      onRequireConfirm,
     })
 
     if (!handler.getContent()) {

@@ -6,7 +6,7 @@ import { AppRuntime } from "../effect/app-runtime.js"
 import { AgentServiceTag } from "../agent/index.js"
 import { MaxIterationsExceededError } from "../agent/types.js"
 import { Session } from "../session/session.js"
-import { createStreamHandler, printUserMessage, printAssistantMessage, printSystemMessage } from "./output.js"
+import { createStreamHandler, createConfirmHandler, printUserMessage, printAssistantMessage, printSystemMessage } from "./output.js"
 
 // ====================================================
 // 主 Agent 常量 — 仅 Chat & Builder 可在 REPL 中切换
@@ -189,6 +189,7 @@ export class REPL {
     const currentModel = this.currentModel
     const currentProvider = this.currentProvider
     const handler = createStreamHandler({ verbose: this.verbose })
+    const onRequireConfirm = createConfirmHandler()
 
     const effect = Effect.gen(function* () {
       const agentService = yield* AgentServiceTag
@@ -196,6 +197,7 @@ export class REPL {
         onChunk: handler.onChunk,
         onToolCall: handler.onToolCall,
         onPhaseChange: handler.onPhaseChange,
+        onRequireConfirm,
         ...(currentModel !== undefined ? { model: currentModel } : {}),
         ...(currentProvider !== undefined ? { provider: currentProvider } : {})
       })

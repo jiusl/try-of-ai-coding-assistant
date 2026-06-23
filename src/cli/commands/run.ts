@@ -5,7 +5,7 @@ import { AppRuntime } from "../../effect/app-runtime.js"
 import { AgentServiceTag } from "../../agent/index.js"
 import { MaxIterationsExceededError } from "../../agent/types.js"
 import { Session } from "../../session/session.js"
-import { createStreamHandler, printSystemMessage, printAssistantMessage, printTitle } from "../output.js"
+import { createStreamHandler, createConfirmHandler, printSystemMessage, printAssistantMessage, printTitle } from "../output.js"
 
 // ====================================================
 // 运行 Agent
@@ -22,11 +22,13 @@ const runAgent = (
     const agentService = yield* AgentServiceTag
     
     const handler = createStreamHandler({ verbose })
+    const onRequireConfirm = createConfirmHandler()
     
     const opts: any = {
       onChunk: handler.onChunk,
       onToolCall: handler.onToolCall,
       onPhaseChange: handler.onPhaseChange,
+      onRequireConfirm,
     }
     if (maxIterations !== undefined) {
       opts.maxIterations = maxIterations
@@ -98,7 +100,8 @@ export const runCommand = new Command("run")
           printSystemMessage("Auto-selecting agent...", "info")
           const agentService = yield* AgentServiceTag
           const handler = createStreamHandler({ verbose })
-          const opts: any = { onChunk: handler.onChunk, onToolCall: handler.onToolCall, onPhaseChange: handler.onPhaseChange }
+          const onRequireConfirm = createConfirmHandler()
+          const opts: any = { onChunk: handler.onChunk, onToolCall: handler.onToolCall, onPhaseChange: handler.onPhaseChange, onRequireConfirm }
           if (maxIterations !== undefined) opts.maxIterations = maxIterations
           result = yield* agentService.runAuto(finalSessionId, input, opts)
         }
