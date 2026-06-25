@@ -32,6 +32,15 @@ export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
   RememberTool,
 ]
 
+/**
+ * 内置工具实现映射表：toolName → ToolDefinition。
+ * ToolLoader 扫描 tools/builtin/ 下的 TOOL.md（execution.type=internal）
+ * 时通过此表查找 TS 实现。
+ */
+export const BUILTIN_TOOL_IMPLS: ReadonlyMap<string, ToolDefinition<any, any>> = new Map(
+  BUILTIN_TOOLS.map((t) => [t.name, t]),
+)
+
 // 重新导出
 export {
   ReadTool,

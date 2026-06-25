@@ -421,10 +421,10 @@ export const AgentExecutorLive = Layer.effect(
         
         yield* setPhase("done", { iteration: iterations, content: finalContent })
         
-        // 方案C：自动从对话中提取长期记忆
-        yield* autoMemory.extract(userInput, finalContent, sessionId).pipe(
+        // 方案C：自动从对话中提取长期记忆（fork 不阻塞，避免延迟发送 done 事件）
+        yield* Effect.fork(autoMemory.extract(userInput, finalContent, sessionId).pipe(
           Effect.catchAll(() => Effect.succeed({ extracted: 0, memories: [] }))
-        )
+        ))
         
         const result: AgentExecutionResult = {
           content: finalContent,

@@ -14,5 +14,8 @@
       "apiKey": "sk-your-deepseek-key",
       "baseUrl": "https://api.deepseek.com/v1"
     }
+  },
+  "kraken": {
+    "baseUrl": "http://localhost:3000"
   }
 }

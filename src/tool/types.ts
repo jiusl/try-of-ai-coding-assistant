@@ -3,6 +3,89 @@ import { Data, Effect, Schema } from "effect"
 import type { Action } from "../permission/types.js"
 
 // ====================================================
+// 工具来源 & 目录映射
+// ====================================================
+
+/** 工具来源：内置 / 用户自定义 / 远程下载 */
+export type ToolSource = "builtin" | "user" | "remote"
+
+/** 工具根目录名称 */
+export const TOOLS_DIR = "tools"
+
+/** ToolSource → 工具子目录映射 */
+export const TOOL_SOURCE_DIRS: Record<ToolSource, string> = {
+  builtin: "builtin",
+  user: "user",
+  remote: "remote",
+} as const
+
+// ====================================================
+// 用户工具配置（TOOL.md frontmatter）
+// ====================================================
+
+/** 参数定义（TOOL.md parameters 区） */
+export interface ToolParameterDef {
+  readonly type: "string" | "number" | "integer" | "boolean" | "array" | "object"
+  readonly description: string
+  readonly required?: boolean
+  readonly default?: unknown
+  readonly enum?: string[]
+  readonly items?: { type: string }
+}
+
+/** 执行配置（仅混合型用户工具） */
+export interface ToolExecutionConfig {
+  readonly type: "script" | "internal"
+  /** 入口脚本路径（相对于工具目录，type=script 时必填） */
+  readonly entry: string
+  /** 解释器，默认根据扩展名推断 */
+  readonly interpreter?: string
+  /** 超时时间（毫秒），默认 30000 */
+  readonly timeout: number
+  /** 是否需要用户确认 */
+  readonly requireConfirm: boolean
+  /** type=internal 时：指向 TS 实现表中的 key */
+  readonly impl?: string
+}
+
+/** TOOL.md YAML frontmatter */
+export interface UserToolFrontmatter {
+  readonly name: string
+  readonly version: string
+  readonly description: string
+  readonly author: string
+  readonly tags: string[]
+  readonly category: ToolCategory
+  readonly permission: Action
+  readonly sensitivity: SensitivityLevel
+  readonly sideEffect: "read" | "write"
+  readonly safeToRetry: boolean
+  readonly defaultEnabled: boolean
+  readonly execution: ToolExecutionConfig
+  readonly parameters: Record<string, ToolParameterDef>
+}
+
+/** 解析后的用户工具定义（含路径等运行时信息） */
+export interface UserToolDefinition {
+  readonly name: string
+  readonly version: string
+  readonly description: string
+  readonly author: string
+  readonly tags: string[]
+  readonly toolDir: string
+  /** TOOL.md 的绝对路径 */
+  readonly mdPath: string
+  /** Markdown 正文（去除 frontmatter，用作工具说明补充） */
+  readonly body: string
+  /** 原始 frontmatter */
+  readonly frontmatter: UserToolFrontmatter
+  /** TOOL.md 的修改时间 */
+  readonly mtime: Date
+  /** 来源 */
+  readonly source: ToolSource
+}
+
+// ====================================================
 // 工具基础类型
 // ====================================================
 
@@ -210,3 +293,25 @@ export class ThinkInput extends Schema.TaggedRequest<ThinkInput>()("ThinkInput",
     plan: Schema.optional(Schema.Array(Schema.String))
   }
 }) {}
+
+// ====================================================
+// 工具加载错误类型
+// ====================================================
+
+export class ToolLoadError extends Data.TaggedError("ToolLoad")<{
+  readonly path: string
+  readonly reason: string
+}> {
+  override get message(): string {
+    return `工具加载失败 (${this.path}): ${this.reason}`
+  }
+}
+
+export class ToolParseError extends Data.TaggedError("ToolParseError")<{
+  readonly path: string
+  readonly reason: string
+}> {
+  override get message(): string {
+    return `工具解析失败 (${this.path}): ${this.reason}`
+  }
+}
