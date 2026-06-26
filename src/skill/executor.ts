@@ -4,6 +4,7 @@ import type { SkillDefinition } from "./types.js"
 import type { SkillRegistryService } from "./registry.js"
 import { SkillRegistry } from "./registry.js"
 import { SkillNotFoundError } from "./types.js"
+import { resolvePython, ensureRequirements } from "../infra/python-env.js"
 
 // ====================================================
 // 执行结果
@@ -34,7 +35,6 @@ export class SkillExecutionError extends Data.TaggedError("SkillExecutionError")
 const EXT_INTERPRETER: Record<string, string> = {
   ".ts": "bun run",
   ".js": "bun run",
-  ".py": "python3",
   ".sh": "bash",
   ".bash": "bash",
   ".zsh": "zsh",
@@ -46,6 +46,11 @@ function inferInterpreter(entry: string, specified?: string): string | null {
   if (specified) return specified
   const ext = entry.slice(entry.lastIndexOf(".")).toLowerCase()
   return EXT_INTERPRETER[ext] ?? null
+}
+
+function isPythonEntry(entry: string): boolean {
+  const ext = entry.slice(entry.lastIndexOf(".")).toLowerCase()
+  return ext === ".py"
 }
 
 // ====================================================
@@ -102,7 +107,19 @@ export const SkillExecutorLive = Layer.effect(
         }
 
         const exec = skill.frontmatter.execution
-        const interpreter = inferInterpreter(exec.entry, exec.interpreter)
+        const cwd = skill.skillDir
+
+        // Python Skill：动态解析解释器，支持 .venv 检测 + 自动安装依赖
+        let interpreter: string | null
+        if (isPythonEntry(exec.entry) && !exec.interpreter) {
+          yield* ensureRequirements(cwd)
+          interpreter = yield* Effect.tryPromise({
+            try: () => resolvePython(cwd),
+            catch: () => process.platform === "win32" ? "python" : "python3"
+          })
+        } else {
+          interpreter = inferInterpreter(exec.entry, exec.interpreter)
+        }
 
         if (!interpreter) {
           return yield* Effect.fail(
@@ -114,9 +131,7 @@ export const SkillExecutorLive = Layer.effect(
         }
 
         // 构建命令
-        const cwd = skill.skillDir
         const cmdParts = [...interpreter.split(" "), exec.entry, ...args]
-        const cmd = cmdParts.join(" ")
 
         const startTime = Date.now()
 

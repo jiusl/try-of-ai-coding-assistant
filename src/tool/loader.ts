@@ -21,15 +21,15 @@ import {
   TOOL_SOURCE_DIRS,
 } from "./types.js"
 import type { Action } from "../permission/types.js"
+import { resolvePython, ensureRequirements } from "../infra/python-env.js"
 
 // ====================================================
-// 解释器推断（与 Skill 系统一致）
+// 解释器推断（非 Python 语言使用静态映射，Python 运行时动态解析）
 // ====================================================
 
 const EXT_INTERPRETER: Record<string, string> = {
   ".ts": "bun run",
   ".js": "bun run",
-  ".py": "python",
   ".sh": "bash",
   ".bash": "bash",
   ".zsh": "zsh",
@@ -41,6 +41,11 @@ function inferInterpreter(entry: string, specified?: string): string | null {
   if (specified) return specified
   const ext = entry.slice(entry.lastIndexOf(".")).toLowerCase()
   return EXT_INTERPRETER[ext] ?? null
+}
+
+function isPythonEntry(entry: string): boolean {
+  const ext = entry.slice(entry.lastIndexOf(".")).toLowerCase()
+  return ext === ".py"
 }
 
 // ====================================================
@@ -506,14 +511,25 @@ export function userToolToDefinition(
 
   const execute = (input: unknown, _context: any): Effect.Effect<string, any, any> =>
     Effect.gen(function* () {
-      const interpreter = inferInterpreter(exec.entry, exec.interpreter)
+      const cwd = def.toolDir
+      let interpreter: string | null
+
+      if (isPythonEntry(exec.entry) && !exec.interpreter) {
+        // Python 工具：动态解析解释器，支持 .venv 检测
+        yield* ensureRequirements(cwd)
+        interpreter = yield* Effect.tryPromise({
+          try: () => resolvePython(cwd),
+          catch: () => process.platform === "win32" ? "python" : "python3"
+        })
+      } else {
+        interpreter = inferInterpreter(exec.entry, exec.interpreter)
+      }
 
       if (!interpreter) {
         return `❌ 工具 "${def.name}" 配置错误：无法推断 "${exec.entry}" 的解释器，请在 execution.interpreter 中指定`
       }
 
       const cmdParts = [...interpreter.split(" "), exec.entry]
-      const cwd = def.toolDir
       const inputJson = JSON.stringify(input)
 
       const result = yield* Effect.tryPromise({

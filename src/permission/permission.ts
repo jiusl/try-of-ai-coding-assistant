@@ -89,15 +89,36 @@ export const DEFAULT_RULES: PermissionRule[] = [
   {
     id: "execute-dev-commands-global",
     action: "execute",
-    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *,ls *,dir *,cat *,type *,echo *,cd *,mkdir *,copy *,cp *,mv *,ren *,touch *,which *,where *,whoami *,pwd *,printenv *,env *,rm *,rmdir *,chmod *,chown *,curl *,wget *,tar *,zip *,unzip *,gzip *,gunzip *,find *,grep *,sed *,awk *,sort *,uniq *,wc *,head *,tail *,tee *,ping *,traceroute *,nslookup *,ssh *,scp *,rsync *,systeminfo *,tasklist *,taskkill *,netstat *,ipconfig *,set *,export *}",
+    pattern: "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env,rm,rmdir,chmod,chown,curl,wget,tar,zip,unzip,gzip,gunzip,find,grep,sed,awk,sort,uniq,wc,head,tail,tee,ping,traceroute,nslookup,ssh,scp,rsync,systeminfo,tasklist,taskkill,netstat,ipconfig,set,export}",
     decision: "allow",
     priority: 1,
     description: "Allow common development and shell commands"
   },
+  // ==================== pip 安全策略（需确认） ====================
+  // install/uninstall 需要用户确认，防止意外修改系统包
+  {
+    id: "pip-install-confirm",
+    action: "execute",
+    pattern: "{pip install,pip3 install,python -m pip install,python3 -m pip install}",
+    decision: "allow",
+    requireConfirm: true,
+    priority: 25,
+    description: "pip install 需要用户确认"
+  },
+  {
+    id: "pip-uninstall-confirm",
+    action: "execute",
+    pattern: "{pip uninstall,pip3 uninstall,pip remove,pip3 remove,python -m pip uninstall,python3 -m pip uninstall}",
+    decision: "allow",
+    requireConfirm: true,
+    priority: 25,
+    description: "pip uninstall 需要用户确认"
+  },
+  // ==================== shell 命令（无需确认） ====================
   {
     id: "shell-dev-commands-global",
     action: "shell",
-    pattern: "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env}",
+    pattern: "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env}",
     decision: "allow",
     priority: 1,
     description: "Allow common shell commands"
@@ -254,7 +275,7 @@ export const DEFAULT_RULES: PermissionRule[] = [
   {
     id: "execute-dangerous",
     action: "execute",
-    pattern: "{rm*,sudo*,chmod*,chown*,kill*,pkill*}",
+    pattern: "{sudo,chmod,chown,kill,pkill}",
     decision: "deny",
     priority: 50,
     description: "Dangerous commands are blocked"
@@ -262,7 +283,7 @@ export const DEFAULT_RULES: PermissionRule[] = [
   {
     id: "execute-shell-unsafe",
     action: "shell",
-    pattern: "{rm*,sudo*,chmod*,chown*}",
+    pattern: "{sudo,chmod,chown}",
     decision: "deny",
     priority: 50,
     description: "Unsafe shell commands are blocked"

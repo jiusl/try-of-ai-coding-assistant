@@ -51,9 +51,19 @@ const extractResource = (toolName: string, input: Record<string, unknown>): stri
   if ("path" in input && typeof input.path === "string") {
     return input.path
   }
-  // 命令类工具：使用 command
+  // 命令类工具：只提取命令名（第一个词），避免路径中的 / 阻断 micromatch * 匹配
   if ("command" in input && typeof input.command === "string") {
-    return input.command
+    const tokens = input.command.split(/\s+/)
+    // pip install / pip uninstall / python -m pip install 需要多词精确匹配
+    if (tokens[0] === "pip" || tokens[0] === "pip3") {
+      return tokens.slice(0, 2).join(" ")
+    }
+    if (tokens[0] === "python" || tokens[0] === "python3") {
+      if (tokens[1] === "-m" && (tokens[2] === "pip" || tokens[2] === "pip3")) {
+        return tokens.slice(0, 4).join(" ")
+      }
+    }
+    return tokens[0] ?? input.command
   }
   // glob 工具：使用 pattern
   if ("pattern" in input && typeof input.pattern === "string") {

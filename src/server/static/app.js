@@ -70,29 +70,31 @@ function debounce(fn, ms = 300) {
 }
 
 // ---------- Markdown 渲染 ----------
+// 使用 marked 库 (GitHub Flavored Markdown)，自定义代码块以匹配 Try 的 UI 风格
+const markedRenderer = new marked.Renderer();
+markedRenderer.code = function({ text, lang }) {
+  const langLabel = lang ? `<span class="code-lang">${lang}</span>` : "";
+  const copyBtn = `<button class="code-copy-btn" onclick="copyCodeBlock(this)" title="复制">📋</button>`;
+  return `<div class="code-block">${langLabel}${copyBtn}<pre><code>${text}</code></pre></div>`;
+};
+
+markedRenderer.table = function(token) {
+  // marked v18 passes the full token: { header: [...], rows: [...], align: [...] }
+  // Use the default table renderer to get HTML, then wrap it
+  const defaultTable = marked.Renderer.prototype.table.call(this, token);
+  const csvBtn = `<button class="csv-dl-btn" onclick="downloadTableCSV(this)" title="下载为 CSV">📥 CSV</button>`;
+  return `<div class="table-wrapper">${csvBtn}<div class="table-scroll">${defaultTable}</div></div>`;
+};
+
+marked.setOptions({
+  renderer: markedRenderer,
+  breaks: true,
+  gfm: true,
+});
+
 function renderMarkdown(text) {
   if (!text) return "";
-  let html = escapeHtml(text);
-
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    const langLabel = lang ? `<span class="code-lang">${lang}</span>` : "";
-    const copyBtn = `<button class="code-copy-btn" onclick="copyCodeBlock(this)" title="复制">📋</button>`;
-    return `<div class="code-block">${langLabel}${copyBtn}<pre><code>${code.trim()}</code></pre></div>`;
-  });
-
-  html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-
-  html = html.split(/\n\n+/).map(p => {
-    p = p.trim();
-    if (!p) return "";
-    if (p.startsWith('<div class="code-block">')) return p;
-    return `<p>${p.replace(/\n/g, "<br>")}</p>`;
-  }).join("");
-
-  return html;
+  return marked.parse(text);
 }
 
 window.copyCodeBlock = function(btn) {
@@ -105,6 +107,38 @@ window.copyCodeBlock = function(btn) {
     btn.textContent = "✗";
     setTimeout(() => (btn.textContent = "📋"), 2000);
   });
+};
+
+window.downloadTableCSV = function(btn) {
+  const wrapper = btn.closest(".table-wrapper");
+  const table = wrapper?.querySelector("table");
+  if (!table) return;
+
+  const rows = table.querySelectorAll("tr");
+  const csvRows = [];
+  for (const row of rows) {
+    const cells = row.querySelectorAll("th, td");
+    const csvCells = [];
+    for (const cell of cells) {
+      let val = cell.textContent || "";
+      // Escape: wrap in quotes if contains comma, quote, or newline
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        val = '"' + val.replace(/"/g, '""') + '"';
+      }
+      csvCells.push(val);
+    }
+    csvRows.push(csvCells.join(','));
+  }
+
+  const bom = '\uFEFF';
+  const csv = bom + csvRows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'table.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 };
 
 window.toggleToolCard = function(header) {

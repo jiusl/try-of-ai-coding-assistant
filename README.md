@@ -41,7 +41,12 @@
 
 ### 环境要求
 
-本项目仅依赖 [Bun](https://bun.sh)（≥1.0），无需 Node.js 或其他运行时。
+| 运行时 | 版本要求 | 用途 |
+|--------|----------|------|
+| **[Bun](https://bun.sh)** | ≥1.0 | TypeScript 运行时 + 包管理 |
+| **Python** | ≥3.10（可选） | 用户工具 & Skill 脚本执行 |
+
+> 💡 Python 仅在使用含 `.py` 脚本的**用户工具**或 **Skill** 时才需要。纯对话 / 代码生成 / 内置工具无需 Python。
 
 安装 Bun：
 
@@ -64,6 +69,55 @@ cp auth.example.json auth.json
 ```
 
 > 💡 `bun install` 即可完成所有必要依赖。`node-llama-cpp`（本地模型支持）为可选依赖，如果系统未安装 CMake 编译工具链，安装时会跳过，不影响在线 API 使用。
+
+### Python 环境（可选）
+
+项目已内置 `.venv` 虚拟环境，Agent 调用 Python 工具时会**自动检测并使用**它。
+
+#### 手动创建 .venv
+
+```bash
+# 确保系统已安装 Python ≥3.10
+python --version
+
+# 创建虚拟环境
+python -m venv .venv
+```
+
+> ⚠️ `.venv/` 已加入 `.gitignore`，不会提交到仓库。
+
+#### 解释器查找优先级
+
+Agent 执行 `.py` 脚本时的查找顺序：
+
+1. **`.venv`** — 从当前目录向上遍历，优先使用项目虚拟环境
+2. **`python`** — 系统 PATH 上的 python
+3. **`python3`** — 回退到 python3
+
+> 这解决了 Windows 上不存在 `python3.exe` 的问题，以及 Linux/macOS 上 `python` 指向 Python 2 的历史遗留问题。
+
+#### 安装 Python 依赖
+
+如果你的工具目录下有 `requirements.txt`，Agent **首次调用时自动安装**：
+
+```
+tools/user/my-tool/
+├── TOOL.md
+├── run.py
+└── requirements.txt    ← Agent 自动 pip install -r
+```
+
+安装成功后会生成 `.requirements-installed` 标记文件（已加入 `.gitignore`），后续跳过安装。
+
+> 你也可以手动激活 `.venv` 后自行安装：
+> ```bash
+> # Windows
+> .venv\Scripts\activate
+> # macOS / Linux
+> source .venv/bin/activate
+>
+> pip install -r tools/user/my-tool/requirements.txt
+> ```
 
 ### 可选：本地模型
 

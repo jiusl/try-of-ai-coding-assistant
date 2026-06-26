@@ -41,7 +41,7 @@
         "description": "允许读写所有文件（含绝对路径）"
       },
       {
-        "pattern": "{npm *,bun *,git *,pnpm *,yarn *,node *,python *,py *,pip *,pip3 *,poetry *,cargo *,go *,rustc *,make *,npx *,tsc *,eslint *,prettier *,deno *,ls *,dir *,cat *,type *,echo *,cd *,mkdir *,copy *,cp *,mv *,ren *,touch *,which *,where *,whoami *,pwd *,printenv *,env *,rm *,rmdir *,chmod *,chown *,curl *,wget *,tar *,zip *,unzip *,gzip *,gunzip *,find *,grep *,sed *,awk *,sort *,uniq *,wc *,head *,tail *,tee *,ping *,traceroute *,nslookup *,ssh *,scp *,rsync *,systeminfo *,tasklist *,taskkill *,netstat *,ipconfig *,set *,export *}",
+        "pattern": "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env,rm,rmdir,chmod,chown,curl,wget,tar,zip,unzip,gzip,gunzip,find,grep,sed,awk,sort,uniq,wc,head,tail,tee,ping,traceroute,nslookup,ssh,scp,rsync,systeminfo,tasklist,taskkill,netstat,ipconfig,set,export}",
         "allow": [
           "execute",
           "shell"
