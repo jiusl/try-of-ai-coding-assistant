@@ -55,13 +55,22 @@ def main():
     # Normalize: accept single URL string or array
     if isinstance(urls, str):
         urls = [urls]
-    if not urls or not isinstance(urls, list):
-        print("Error: urls is required and must be a non-empty array of URLs")
-        sys.exit(1)
+    if isinstance(urls, list) and len(urls) == 0:
+        urls = None
 
-    payload = {"urls": urls}
+    payload = {}
+    if urls:
+        payload["urls"] = urls
     if query:
-        payload["query"] = query
+        # 如果没有 urls，query 作为 intent 发送（自主搜索模式）
+        if not urls:
+            payload["intent"] = query
+        else:
+            payload["query"] = query
+
+    if not payload:
+        print("Error: at least one of 'urls' or 'query' must be provided")
+        sys.exit(1)
 
     req_body = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
@@ -71,10 +80,13 @@ def main():
         method="POST",
     )
 
-    print(f"Ingesting {len(urls)} URL(s) via Kraken smart routing...")
+    if urls:
+        print(f"Ingesting {len(urls)} URL(s) via Kraken smart routing...")
+        print(f"URLs: {', '.join(urls[:5])}" + ("..." if len(urls) > 5 else ""))
+    else:
+        print("Running Kraken autonomous search (no URLs provided)...")
     if query:
-        print(f"Context query: {query}")
-    print(f"URLs: {', '.join(urls[:5])}" + ("..." if len(urls) > 5 else ""))
+        print(f"{'Intent' if not urls else 'Context query'}: {query}")
     print()
 
     try:

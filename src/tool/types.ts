@@ -117,6 +117,8 @@ export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
   permission: Action
   /** 输入参数 Schema（用于验证和生成 JSON Schema） */
   inputSchema: Schema.Schema<any>
+  /** 原始参数 JSON Schema（用户工具直接提供，优先于 inputSchema 的 Effect 转换） */
+  rawParameters?: Record<string, unknown>
   /** 副作用级别：只读 / 写入（驱动确认机制和重试策略） */
   sideEffect: "read" | "write"
   /** 是否可安全重试（只读操作通常为 true，幂等写入也可为 true） */

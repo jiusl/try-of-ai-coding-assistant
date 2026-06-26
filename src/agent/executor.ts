@@ -127,18 +127,35 @@ export const AgentExecutorLive = Layer.effect(
         yield* setPhase("initializing")
         yield* session.addUserMessage(sessionId, userInput)
         
-        const regularToolNames = agent.toolNames.filter(n => n !== DELEGATE_TOOL_NAME)
+        // 动态合并用户/远程工具：Agent 静态 toolNames 只列内置工具，
+        // 用户通过 tools/user/ 目录添加的工具按 Agent 能力自动注入
+        const agentCanWrite = agent.capabilities.some(c =>
+          c === "code-write" || c === "code-edit" || c === "execute" || c === "build"
+        )
+        const allRegisteredTools = yield* toolRegistry.list({ enabledOnly: true })
+        const dynamicToolNames = allRegisteredTools
+          .filter(t => {
+            if (agent.toolNames.includes(t.name)) return false               // 已静态声明，跳过
+            if (t.sideEffect === "read" || agentCanWrite) return true        // 只读工具所有 Agent 可用；写工具仅写能力 Agent 可用
+            return false
+          })
+          .map(t => t.name)
+
+        const regularToolNames = [
+          ...agent.toolNames.filter(n => n !== DELEGATE_TOOL_NAME),
+          ...dynamicToolNames,
+        ]
         const hasDelegate = agent.toolNames.includes(DELEGATE_TOOL_NAME)
-        
+
         const toolDefs = regularToolNames.length > 0
           ? yield* toolRegistry.getOpenAIDefinitions(regularToolNames)
           : []
-        
+
         const allToolDefs = hasDelegate
           ? [...toolDefs, DelegateJSONSchema]
           : toolDefs
-        
-        if (agent.toolNames.length > 0 && allToolDefs.length === 0) {
+
+        if (regularToolNames.length > 0 && toolDefs.length === 0) {
           return yield* Effect.fail(new NoToolsAvailableError({ agentId: agent.id }))
         }
         

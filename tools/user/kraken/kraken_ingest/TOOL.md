@@ -23,8 +23,8 @@ execution:
 parameters:
   urls:
     type: array
-    description: List of URLs to ingest (e.g., ["https://example.com/doc1", "https://example.com/doc2"])
-    required: true
+    description: List of URLs to ingest (e.g., ["https://example.com/doc1", "https://example.com/doc2"]). Optional — when omitted, Kraken will perform autonomous search based on the query.
+    required: false
     items:
       type: string
   query:

@@ -21,17 +21,24 @@ import { SkillRegistry } from "../skill/registry.js"
 
 const toJSONSchema = <T>(schema: Schema.Schema<T>): Record<string, unknown> => {
   // 使用 Effect Schema 内置的 JSON Schema 转换
-  const result = JSONSchema.make(schema) as unknown as Record<string, unknown>
+  const raw = JSONSchema.make(schema) as unknown as Record<string, unknown>
+  // 去掉 Effect 元数据字段，避免部分 LLM 提供商拒绝
+  delete raw["$schema"]
+  delete raw["$id"]
+  // 安全防护：无 type 字段时兜底为 object（如 Schema.Unknown）
+  if (!raw.type) {
+    return { type: "object" }
+  }
   // 安全防护：如果根节点 type 不是 "object"，用 properties 包裹
-  if (result.type !== "object" && result.properties) {
+  if (raw.type !== "object" && raw.properties) {
     return {
       type: "object",
-      properties: result.properties,
-      required: result.required ?? [],
+      properties: raw.properties,
+      required: raw.required ?? [],
       additionalProperties: false
     }
   }
-  return result
+  return raw
 }
 
 // 从工具输入中提取权限匹配用的资源路径
@@ -147,8 +154,9 @@ export const ToolRegistryLive = Layer.effect(
       Effect.gen(function* () {
         const tool = yield* get(name)
         
-        // 获取 Schema 并转换为 JSON Schema
-        const parameters = toJSONSchema(tool.inputSchema)
+        // 用户工具优先使用 rawParameters（直接从 TOOL.md 的 parameters 区解析），
+        // 内置工具通过 inputSchema 的 Effect Schema 转换
+        const parameters = tool.rawParameters ?? toJSONSchema(tool.inputSchema)
         
         return {
           type: "function",
@@ -238,6 +246,12 @@ export const ToolRegistryLive = Layer.effect(
         const rawObject = (rawArgs && typeof rawArgs === "object" && !Array.isArray(rawArgs))
           ? rawArgs as Record<string, unknown>
           : {}
+        
+        // 有 rawParameters 的用户工具：跳过 Effect Schema 校验，
+        // 因为发给 LLM 的 JSON Schema 已经约束了参数形状
+        if (tool.rawParameters) {
+          return rawArgs as TInput
+        }
         
         // 使用 Schema 验证
         const decoded = yield* Schema.decodeUnknown(tool.inputSchema)(rawArgs).pipe(

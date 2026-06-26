@@ -29,7 +29,7 @@ import type { Action } from "../permission/types.js"
 const EXT_INTERPRETER: Record<string, string> = {
   ".ts": "bun run",
   ".js": "bun run",
-  ".py": "python3",
+  ".py": "python",
   ".sh": "bash",
   ".bash": "bash",
   ".zsh": "zsh",
@@ -50,7 +50,7 @@ function inferInterpreter(entry: string, specified?: string): string | null {
 const FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---\s*\n/
 
 /** 将 YAML 参数定义转换为 JSON Schema */
-function paramsToJSONSchema(params: Record<string, ToolParameterDef>): Record<string, unknown> {
+export function paramsToJSONSchema(params: Record<string, ToolParameterDef>): Record<string, unknown> {
   const properties: Record<string, unknown> = {}
   const required: string[] = []
 
@@ -353,34 +353,43 @@ export class ToolLoader extends Context.Tag("ToolLoader")<
 // ====================================================
 
 export const ToolLoaderLive = Layer.sync(ToolLoader, () => {
+  /** 递归扫描目录，收集所有含有 TOOL.md 的子目录 */
   const scanDirectory = async (dirPath: string): Promise<string[]> => {
-    try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true })
-      return entries
-        .filter((e) => e.isDirectory())
-        .map((e) => path.join(dirPath, e.name))
-    } catch {
-      return []
+    const result: string[] = []
+    const walk = async (current: string): Promise<void> => {
+      try {
+        const entries = await fs.readdir(current, { withFileTypes: true })
+        const subdirs: string[] = []
+        for (const e of entries) {
+          if (e.isDirectory()) {
+            subdirs.push(path.join(current, e.name))
+          }
+        }
+        // 检查当前目录是否直接包含 TOOL.md
+        const mdPath = path.join(current, "TOOL.md")
+        try {
+          await fs.access(mdPath)
+          result.push(current)
+        } catch {
+          // 当前目录没有 TOOL.md → 递归进入子目录
+          for (const sub of subdirs) {
+            await walk(sub)
+          }
+        }
+      } catch {
+        // fs.readdir 失败，静默跳过
+      }
     }
-  }
-
-  const findToolMd = async (toolDir: string): Promise<string | null> => {
-    const mdPath = path.join(toolDir, "TOOL.md")
-    try {
-      await fs.access(mdPath)
-      return mdPath
-    } catch {
-      return null
-    }
+    await walk(dirPath)
+    return result
   }
 
   const loadToolDir = async (
     toolDir: string,
     source: ToolSource,
   ): Promise<UserToolDefinition | null> => {
-    const mdPath = await findToolMd(toolDir)
-    if (!mdPath) return null
-
+    // scanDirectory 已保证 TOOL.md 存在，直接读取
+    const mdPath = path.join(toolDir, "TOOL.md")
     try {
       const rawContent = await fs.readFile(mdPath, "utf-8")
       const stat = await fs.stat(mdPath)
@@ -490,7 +499,10 @@ export function userToolToDefinition(
   }
 
   // script 类型：通过子进程执行
-  const inputSchema = Schema.parseJson(Schema.Unknown)
+  // Schema.Unknown 接受任意值（对象/数组/字符串），不做类型校验。
+  // LLM 看到的 JSON Schema 由 rawParameters 提供（从 TOOL.md 的 parameters 区解析）
+  const inputSchema = Schema.Unknown
+  const rawParameters = paramsToJSONSchema(def.frontmatter.parameters)
 
   const execute = (input: unknown, _context: any): Effect.Effect<string, any, any> =>
     Effect.gen(function* () {
@@ -533,7 +545,15 @@ export function userToolToDefinition(
           stderr: `脚本执行异常: ${String(err)}`,
           exitCode: -1,
         }),
-      })
+      }).pipe(
+        Effect.catchAll((err) =>
+          Effect.succeed({
+            stdout: "",
+            stderr: `脚本执行异常: ${String(err)}`,
+            exitCode: -1,
+          })
+        )
+      )
 
       const parts: string[] = []
       if (result.stdout) parts.push(result.stdout)
@@ -548,6 +568,7 @@ export function userToolToDefinition(
     category: def.frontmatter.category,
     permission: def.frontmatter.permission,
     inputSchema,
+    ...(Object.keys(def.frontmatter.parameters).length > 0 ? { rawParameters } : {}),
     sideEffect: def.frontmatter.sideEffect,
     safeToRetry: def.frontmatter.safeToRetry,
     sensitivity: def.frontmatter.sensitivity,
