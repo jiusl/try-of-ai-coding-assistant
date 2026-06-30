@@ -23,17 +23,19 @@ const convertConfigRules = (configRules: ConfigPermissionRule[]): PermissionRule
     const actions = cr.allow ?? []
     
     if (actions.length === 0) {
-      // allow 为空 → 生成一条 deny-all 规则
-      const rule: PermissionRule = {
-        id: `config-deny-${cr.pattern.replace(/[^a-zA-Z0-9]/g, "-")}`,
-        action: "read" as Action,
-        pattern: cr.pattern,
-        decision: "deny",
-        priority: 25,
-        description: cr.description ?? `Blocked by config: ${cr.pattern}`
+      // allow 为空 → 对 read/write/edit 各生成一条 deny 规则
+      for (const denyAction of ["read", "write", "edit"] as Action[]) {
+        const rule: PermissionRule = {
+          id: `config-deny-${denyAction}-${cr.pattern.replace(/[^a-zA-Z0-9]/g, "-")}`,
+          action: denyAction,
+          pattern: cr.pattern,
+          decision: "deny",
+          priority: 25,
+          description: cr.description ?? `禁止 ${denyAction}: ${cr.pattern}`
+        }
+        if (cr.requireConfirm !== undefined) rule.requireConfirm = cr.requireConfirm
+        result.push(rule)
       }
-      if (cr.requireConfirm !== undefined) rule.requireConfirm = cr.requireConfirm
-      result.push(rule)
     } else {
       // 为每个 action 生成一条 allow 规则
       for (let i = 0; i < actions.length; i++) {
@@ -60,50 +62,120 @@ const convertConfigRules = (configRules: ConfigPermissionRule[]): PermissionRule
 // ====================================================
 
 export const DEFAULT_RULES: PermissionRule[] = [
-  // ==================== 全局文件操作（最低优先级，覆盖绝�?路径） ====================
+  // ================================================================
+  // 优先级分层：
+  //   P0 (0)  — 全局兜底允许
+  //   P10 (10) — 需确认的敏感操作
+  //   P30 (30) — 安全拒绝（.env / .git / 删除）
+  //   P50 (50) — 危险命令拒绝
+  // ================================================================
+
+  // ==================== P0: 全局兜底 — 允许所有文件读写（含 dotfile）、常用命令 ====================
   {
-    id: "read-all-global",
+    id: "file-read-all",
     action: "read",
-    pattern: "**/*",
+    pattern: "**/{*,.*}",
     decision: "allow",
-    priority: 1,
-    description: "Allow reading any file from any directory (absolute or relative)"
+    priority: 0,
+    description: "允许读取任意文件（含 dotfile 和绝对路径）"
   },
   {
-    id: "write-all-global",
+    id: "file-write-all",
     action: "write",
-    pattern: "**/*",
+    pattern: "**/{*,.*}",
     decision: "allow",
-    priority: 1,
-    description: "Allow writing any file to any directory"
+    priority: 0,
+    description: "允许写入任意文件（含 dotfile 和绝对路径）"
   },
   {
-    id: "edit-all-global",
+    id: "file-edit-all",
     action: "edit",
-    pattern: "**/*",
+    pattern: "**/{*,.*}",
     decision: "allow",
-    priority: 1,
-    description: "Allow editing any file in any directory"
+    priority: 0,
+    description: "允许编辑任意文件（含 dotfile 和绝对路径）"
   },
-  // ==================== 全局命令执行（最低优先�?====================
   {
-    id: "execute-dev-commands-global",
+    id: "cmd-common-all",
     action: "execute",
     pattern: "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env,rm,rmdir,chmod,chown,curl,wget,tar,zip,unzip,gzip,gunzip,find,grep,sed,awk,sort,uniq,wc,head,tail,tee,ping,traceroute,nslookup,ssh,scp,rsync,systeminfo,tasklist,taskkill,netstat,ipconfig,set,export}",
     decision: "allow",
-    priority: 1,
-    description: "Allow common development and shell commands"
+    priority: 0,
+    description: "允许常用开发和系统命令"
   },
-  // ==================== pip 安全策略（需确认） ====================
-  // install/uninstall 需要用户确认，防止意外修改系统包
+  {
+    id: "shell-common-all",
+    action: "shell",
+    pattern: "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env}",
+    decision: "allow",
+    priority: 0,
+    description: "允许常用 Shell 命令"
+  },
+
+  // ==================== P10: 敏感操作 — 需用户确认 ====================
+  {
+    id: "write-package-json",
+    action: "write",
+    pattern: "**/package.json",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "修改 package.json 需确认"
+  },
+  {
+    id: "edit-package-json",
+    action: "edit",
+    pattern: "**/package.json",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "编辑 package.json 需确认"
+  },
+  {
+    id: "write-tsconfig",
+    action: "write",
+    pattern: "**/tsconfig*.json",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "修改 tsconfig 需确认"
+  },
+  {
+    id: "edit-tsconfig",
+    action: "edit",
+    pattern: "**/tsconfig*.json",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "编辑 tsconfig 需确认"
+  },
+  {
+    id: "write-prettier-eslint",
+    action: "write",
+    pattern: "**/{.prettierrc,.prettierrc.json,.eslintrc,.eslintrc.json,.eslint.config.*}",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "修改 Prettier/ESLint 配置需确认"
+  },
+  {
+    id: "edit-prettier-eslint",
+    action: "edit",
+    pattern: "**/{.prettierrc,.prettierrc.json,.eslintrc,.eslintrc.json,.eslint.config.*}",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "编辑 Prettier/ESLint 配置需确认"
+  },
+  // pip install/uninstall 需确认
   {
     id: "pip-install-confirm",
     action: "execute",
     pattern: "{pip install,pip3 install,python -m pip install,python3 -m pip install}",
     decision: "allow",
     requireConfirm: true,
-    priority: 25,
-    description: "pip install 需要用户确认"
+    priority: 10,
+    description: "pip install 需确认"
   },
   {
     id: "pip-uninstall-confirm",
@@ -111,245 +183,151 @@ export const DEFAULT_RULES: PermissionRule[] = [
     pattern: "{pip uninstall,pip3 uninstall,pip remove,pip3 remove,python -m pip uninstall,python3 -m pip uninstall}",
     decision: "allow",
     requireConfirm: true,
-    priority: 25,
-    description: "pip uninstall 需要用户确认"
-  },
-  // ==================== shell 命令（无需确认） ====================
-  {
-    id: "shell-dev-commands-global",
-    action: "shell",
-    pattern: "{npm,bun,git,pnpm,yarn,node,python,py,pip,pip3,poetry,cargo,go,rustc,make,npx,tsc,eslint,prettier,deno,ls,dir,cat,type,echo,cd,mkdir,copy,cp,mv,ren,touch,which,where,whoami,pwd,printenv,env}",
-    decision: "allow",
-    priority: 1,
-    description: "Allow common shell commands"
-  },
-
-  // ==================== 文件读取（特定类型，优先级高于全局�?====================
-  {
-    id: "read-project-files",
-    action: "read",
-    pattern: "src/**/*.{ts,js,tsx,jsx}",
-    decision: "allow",
     priority: 10,
-    description: "Read project source files"
+    description: "pip uninstall 需确认"
   },
+  // Git 写操作需确认
   {
-    id: "read-docs",
-    action: "read",
-    pattern: "docs/**/*.md",
-    decision: "allow",
-    priority: 10,
-    description: "Read documentation files"
-  },
-  {
-    id: "read-config-files",
-    action: "read",
-    pattern: "{package.json,tsconfig.json,.env.example}",
-    decision: "allow",
-    priority: 10,
-    description: "Read configuration files"
-  },
-  {
-    id: "read-sensitive-files",
-    action: "read",
-    pattern: ".env",
-    decision: "deny",
-    priority: 20,
-    description: "Block sensitive environment files"
-  },
-  {
-    id: "read-git-files",
-    action: "read",
-    pattern: ".git/**",
-    decision: "deny",
-    priority: 20,
-    description: "Block git directory access"
-  },
-  {
-    id: "read-node-modules",
-    action: "read",
-    pattern: "node_modules/**",
-    decision: "allow",
-    priority: 5,
-    description: "Read node_modules (low priority)"
-  },
-  
-  // ==================== 文件写入 ====================
-  {
-    id: "write-source-code",
-    action: "write",
-    pattern: "src/**/*.{ts,js,tsx,jsx}",
-    decision: "allow",
-    priority: 10,
-    description: "Write source code"
-  },
-  {
-    id: "write-docs",
-    action: "write",
-    pattern: "docs/**/*.md",
-    decision: "allow",
-    priority: 10,
-    description: "Write documentation"
-  },
-  {
-    id: "write-package-json",
-    action: "write",
-    pattern: "package.json",
-    decision: "ask",
-    priority: 15,
-    description: "Modify package.json - requires confirmation",
-    requireConfirm: true
-  },
-  {
-    id: "write-config",
-    action: "write",
-    pattern: "{tsconfig.json,.prettierrc.json}",
-    decision: "ask",
-    priority: 15,
-    description: "Modify config files - requires confirmation",
-    requireConfirm: true
-  },
-  {
-    id: "write-lock-files",
-    action: "write",
-    pattern: "{package-lock.json,bun.lock,yarn.lock}",
-    decision: "allow",
-    priority: 10,
-    description: "Lock files can be written automatically"
-  },
-  
-  // ==================== 文件编辑 ====================
-  {
-    id: "edit-source-code",
-    action: "edit",
-    pattern: "src/**/*.{ts,js,tsx,jsx}",
-    decision: "allow",
-    priority: 10,
-    description: "Edit source code"
-  },
-  
-  // ==================== 文件删除 ====================
-  {
-    id: "delete-any",
-    action: "delete",
-    pattern: "**",
-    decision: "deny",
-    priority: 100,
-    description: "Deletion is completely forbidden"
-  },
-  
-  // ==================== 命令执行 ====================
-  {
-    id: "execute-npm-safe",
-    action: "execute",
-    pattern: "{npm install,npm test,npm run build,npm run dev}",
-    decision: "allow",
-    priority: 10,
-    description: "Safe npm commands"
-  },
-  {
-    id: "execute-bun-safe",
-    action: "execute",
-    pattern: "{bun install*,bun test*,bun run*}",
-    decision: "allow",
-    priority: 10,
-    description: "Safe bun commands"
-  },
-  {
-    id: "execute-git-read",
-    action: "execute",
-    pattern: "{git status,git diff,git log,git branch}",
-    decision: "allow",
-    priority: 10,
-    description: "Read-only git commands"
-  },
-  {
-    id: "execute-git-write",
+    id: "git-write-confirm",
     action: "execute",
     pattern: "{git add,git commit,git push,git pull,git merge,git rebase}",
     decision: "ask",
-    priority: 15,
-    description: "Git write operations need confirmation",
-    requireConfirm: true
+    priority: 10,
+    requireConfirm: true,
+    description: "Git 写操作需确认"
+  },
+  // 本地网络请求需确认
+  {
+    id: "net-localhost-confirm",
+    action: "network",
+    pattern: "http://localhost:*",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "本地网络请求需确认"
+  },
+  // 敏感环境变量需确认
+  {
+    id: "env-sensitive-confirm",
+    action: "env",
+    pattern: "{*KEY,*SECRET,*TOKEN,*PASSWORD}",
+    decision: "ask",
+    priority: 10,
+    requireConfirm: true,
+    description: "敏感环境变量需确认"
+  },
+
+  // ==================== P30: 安全拒绝 ====================
+  {
+    id: "block-env",
+    action: "read",
+    pattern: "**/.env",
+    decision: "deny",
+    priority: 30,
+    description: "禁止读取 .env 文件"
   },
   {
-    id: "execute-dangerous",
+    id: "block-write-env",
+    action: "write",
+    pattern: "**/.env",
+    decision: "deny",
+    priority: 30,
+    description: "禁止写入 .env 文件"
+  },
+  {
+    id: "block-edit-env",
+    action: "edit",
+    pattern: "**/.env",
+    decision: "deny",
+    priority: 30,
+    description: "禁止编辑 .env 文件"
+  },
+  {
+    id: "block-git",
+    action: "read",
+    pattern: "**/.git/**",
+    decision: "deny",
+    priority: 30,
+    description: "禁止访问 .git 目录"
+  },
+  {
+    id: "block-write-git",
+    action: "write",
+    pattern: "**/.git/**",
+    decision: "deny",
+    priority: 30,
+    description: "禁止写入 .git 目录"
+  },
+  {
+    id: "block-delete",
+    action: "delete",
+    pattern: "**/{*,.*}",
+    decision: "deny",
+    priority: 30,
+    description: "禁止删除文件"
+  },
+
+  // ==================== P50: 危险命令拒绝 ====================
+  {
+    id: "block-dangerous-exec",
     action: "execute",
     pattern: "{sudo,chmod,chown,kill,pkill}",
     decision: "deny",
     priority: 50,
-    description: "Dangerous commands are blocked"
+    description: "禁止危险命令"
   },
   {
-    id: "execute-shell-unsafe",
+    id: "block-dangerous-shell",
     action: "shell",
     pattern: "{sudo,chmod,chown}",
     decision: "deny",
     priority: 50,
-    description: "Unsafe shell commands are blocked"
+    description: "禁止危险 Shell 命令"
   },
-  
-  // ==================== 网络请求 ====================
+
+  // ==================== P20: AI API 网络 ====================
   {
-    id: "network-ai-apis",
+    id: "net-openai",
     action: "network",
     pattern: "https://api.openai.com/**",
     decision: "allow",
-    priority: 10,
-    description: "OpenAI API calls"
+    priority: 20,
+    description: "OpenAI API"
   },
   {
-    id: "network-anthropic",
+    id: "net-anthropic",
     action: "network",
     pattern: "https://api.anthropic.com/**",
     decision: "allow",
-    priority: 10,
-    description: "Anthropic API calls"
+    priority: 20,
+    description: "Anthropic API"
   },
   {
-    id: "network-deepseek",
+    id: "net-deepseek",
     action: "network",
     pattern: "https://api.deepseek.com/**",
     decision: "allow",
-    priority: 10,
-    description: "DeepSeek API calls"
+    priority: 20,
+    description: "DeepSeek API"
   },
   {
-    id: "network-npm-registry",
+    id: "net-npm",
     action: "network",
     pattern: "https://registry.npmjs.org/**",
     decision: "allow",
-    priority: 10,
-    description: "NPM registry"
+    priority: 20,
+    description: "NPM Registry"
   },
+
+  // ==================== P5: 安全环境变量 ====================
   {
-    id: "network-localhost",
-    action: "network",
-    pattern: "http://localhost:*",
-    decision: "ask",
-    priority: 15,
-    description: "Local network requests need confirmation",
-    requireConfirm: true
-  },
-  
-  // ==================== 环境变量 ====================
-  {
-    id: "env-read-safe",
+    id: "env-safe",
     action: "env",
     pattern: "{NODE_ENV,CI,PORT}",
     decision: "allow",
-    priority: 10,
-    description: "Safe environment variables"
+    priority: 5,
+    description: "安全环境变量"
   },
-  {
-    id: "env-read-sensitive",
-    action: "env",
-    pattern: "{*KEY,*SECRET,*TOKEN,*PASSWORD}",
-    decision: "ask",
-    priority: 15,
-    description: "Sensitive environment variables need confirmation",
-    requireConfirm: true
-  }
 ]
 
 // ====================================================

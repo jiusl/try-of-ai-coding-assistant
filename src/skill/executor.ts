@@ -113,10 +113,13 @@ export const SkillExecutorLive = Layer.effect(
         let interpreter: string | null
         if (isPythonEntry(exec.entry) && !exec.interpreter) {
           yield* ensureRequirements(cwd)
+          const fallback = process.platform === "win32" ? "python" : "python3"
           interpreter = yield* Effect.tryPromise({
             try: () => resolvePython(cwd),
-            catch: () => process.platform === "win32" ? "python" : "python3"
-          })
+            catch: (err) => new Error(`Failed to resolve Python: ${String(err)}`),
+          }).pipe(
+            Effect.catchAll(() => Effect.succeed(fallback))
+          )
         } else {
           interpreter = inferInterpreter(exec.entry, exec.interpreter)
         }

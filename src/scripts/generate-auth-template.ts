@@ -2,7 +2,6 @@
 import { writeFileSync } from "fs"
 
 const template = {
-  defaultProvider: "openai",
   providers: {
     openai: {
       apiKey: "YOUR_OPENAI_API_KEY",

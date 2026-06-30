@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: grep
+  type: script
+  entry: main.py
 parameters:
   pattern:
     type: string

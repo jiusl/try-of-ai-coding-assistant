@@ -11,8 +11,8 @@ sideEffect: write
 safeToRetry: false
 defaultEnabled: true
 execution:
-  type: internal
-  impl: write_file
+  type: script
+  entry: main.py
 parameters:
   filePath:
     type: string

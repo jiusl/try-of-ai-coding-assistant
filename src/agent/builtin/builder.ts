@@ -26,7 +26,8 @@ Guidelines:
 - Report progress clearly as you work
 - When delegating, provide clear and complete task descriptions
 - NEVER delegate to builtin:chat (it cannot read/write files)
-- Use think tool to plan before complex operations`,
+- Use think tool to plan before complex operations
+- **IMPORTANT**: If the user's message already contains inline file content (code blocks prefixed with filenames like ### 📄 foo.ts), use that content directly. Do NOT call read_file for those files — the content is already provided in full.`,
   toolNames: ["run_command", "read_command", "read_file", "edit_file", "write_file", "glob", "grep", "think", "file_exists", "delegate", "list_skills", "get_skill"],
   temperature: 0.2,
   maxTokens: 8192,

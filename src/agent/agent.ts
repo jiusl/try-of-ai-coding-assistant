@@ -147,8 +147,32 @@ export const AgentServiceLive = Layer.effect(
           if (Option.isSome(currentAgentOpt) && currentAgentOpt.value.enabled !== false) {
             agent = currentAgentOpt.value
           } else {
-            // 默认使用 builtin:chat
-            agent = yield* registry.get("builtin:chat")
+            // 自动选择：按能力匹配，或回退到第一个启用的 Agent
+            const enabledAgents = yield* registry.list({ enabledOnly: true })
+            if (enabledAgents.length === 0) {
+              return yield* Effect.fail(
+                new AgentNotFoundError({ agentId: "(no enabled agent)" })
+              )
+            }
+
+            // 简单启发式：优先匹配有 "code" 能力的 agent（针对编程类输入）
+            const lowerInput = userInput.toLowerCase()
+            const isCodingTask =
+              lowerInput.includes("代码") || lowerInput.includes("实现") ||
+              lowerInput.includes("排序") || lowerInput.includes("算法") ||
+              lowerInput.includes("写") || lowerInput.includes("code") ||
+              lowerInput.includes("sort") || lowerInput.includes("function") ||
+              lowerInput.includes("bug") || lowerInput.includes("修复")
+
+            if (isCodingTask) {
+              const coder = enabledAgents.find(
+                (a) => a.capabilities.includes("code-read") || a.capabilities.includes("code-write")
+              )
+              agent = coder ?? enabledAgents[0]!
+            } else {
+              agent = enabledAgents[0]!
+            }
+
             yield* Ref.update(sessionAgents, map => map.set(sessionId, agent.id))
           }
         }

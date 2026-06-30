@@ -22,6 +22,7 @@ import {
 } from "./types.js"
 import type { Action } from "../permission/types.js"
 import { resolvePython, ensureRequirements } from "../infra/python-env.js"
+import { logger } from "../infra/logger.js"
 
 // ====================================================
 // 解释器推断（非 Python 语言使用静态映射，Python 运行时动态解析）
@@ -401,7 +402,7 @@ export const ToolLoaderLive = Layer.sync(ToolLoader, () => {
       return parseToolMd(rawContent, mdPath, toolDir, source, stat.mtime)
     } catch (err) {
       if (err instanceof ToolParseError) {
-        console.warn(`⚠  跳过无效工具: ${err.reason} (${err.path})`)
+        logger.warn(`跳过无效工具: ${err.reason} (${err.path})`)
         return null
       }
       throw err
@@ -497,7 +498,7 @@ export function userToolToDefinition(
     const implKey = exec.impl ?? def.name
     const impl = builtinImpls?.get(implKey)
     if (!impl) {
-      console.warn(`⚠  内置工具 "${def.name}" 的实现 "${implKey}" 未找到`)
+      logger.warn(`内置工具 "${def.name}" 的实现 "${implKey}" 未找到`)
       return null
     }
     return impl
@@ -539,6 +540,11 @@ export function userToolToDefinition(
             stdin: "pipe",
             stdout: "pipe",
             stderr: "pipe",
+            env: {
+              ...process.env,
+              PYTHONIOENCODING: "utf-8",
+              PYTHONUTF8: "1",
+            },
           })
 
           if (proc.stdin) {

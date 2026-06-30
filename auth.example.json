@@ -1,5 +1,4 @@
 {
-  "defaultProvider": "deepseek",
   "providers": {
     "openai": {
       "apiKey": "sk-your-openai-key",

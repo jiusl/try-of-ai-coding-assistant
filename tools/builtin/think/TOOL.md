@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: think
+  type: script
+  entry: main.py
 parameters:
   thought:
     type: string

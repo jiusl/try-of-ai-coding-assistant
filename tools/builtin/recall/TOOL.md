@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: recall
+  type: script
+  entry: main.py
 parameters:
   query:
     type: string

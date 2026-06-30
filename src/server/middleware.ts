@@ -1,9 +1,13 @@
 // src/server/middleware.ts
 // ====================================================
-// 中间件工具：CORS、JSON 解析、静态文件服务
+// 中间件工具：CORS、安全头、JSON 解析、静态文件服务
 // ====================================================
 
 import type { RequestContext, RouteHandler } from "./types.js"
+import type { ApiError, ApiErrorCode } from "./errors.js"
+import { errorToApiError } from "./errors.js"
+import { rbac } from "../infra/rbac.js"
+import { existsSync } from "fs"
 
 // -------------------------------------------------
 // CORS 中间件
@@ -14,6 +18,39 @@ const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "86400",
+}
+
+/** 安全响应头 */
+export const SECURITY_HEADERS: Record<string, string> = {
+  "Content-Security-Policy":
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+    "img-src 'self' data: https:; " +
+    "font-src 'self' https://cdn.jsdelivr.net; " +
+    "connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.deepseek.com; " +
+    "frame-src 'none'; " +
+    "object-src 'none'",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "X-XSS-Protection": "1; mode=block",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "Permissions-Policy":
+    "camera=(), microphone=(), geolocation=(), interest-cohort=()",
+  // HSTS 仅在 HTTPS 下生效，通过环境变量控制
+  ...(process.env.TRY_HSTS_ENABLE === "true"
+    ? { "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload" }
+    : {}),
+}
+
+/** 合并安全头到已有 headers */
+export function applySecurityHeaders(headers: Headers): Headers {
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    if (!headers.has(key)) {
+      headers.set(key, value)
+    }
+  }
+  return headers
 }
 
 /** 为 Response 添加 CORS 头 */
@@ -62,6 +99,29 @@ export function errorResponse(message: string, status: number = 400): Response {
   return jsonResponse({ success: false, error: message }, status)
 }
 
+/** 创建结构化 API 错误响应（使用统一错误码） */
+export function apiErrorResponse(
+  code: ApiErrorCode,
+  message: string,
+  status: number = 400,
+  details?: Record<string, string>,
+): Response {
+  const body: { success: false; error: ApiError } = {
+    success: false,
+    error: { code, message, ...(details !== undefined ? { details } : {}) },
+  }
+  return jsonResponse(body, status)
+}
+
+/** 将任意错误转为结构化 API 错误响应 */
+export function errorToStructuredResponse(err: unknown, fallbackStatus = 500): Response {
+  const apiErr = errorToApiError(err)
+  return jsonResponse(
+    { success: false, error: apiErr },
+    apiErr.status ?? fallbackStatus,
+  )
+}
+
 /** 创建成功 JSON 响应 */
 export function successResponse<T>(data: T, status: number = 200): Response {
   return jsonResponse({ success: true, data }, status)
@@ -69,8 +129,21 @@ export function successResponse<T>(data: T, status: number = 200): Response {
 
 /** 从请求中解析 JSON body */
 export async function parseJsonBody<T = unknown>(request: Request): Promise<T> {
-  const text = await request.text()
-  return JSON.parse(text) as T
+  let text: string
+  try {
+    text = await request.text()
+  } catch (err) {
+    throw new Error(`无法读取请求体: ${err instanceof Error ? err.message : String(err)}`)
+  }
+  if (!text || text.trim() === "") {
+    throw new Error("请求体为空，请提供有效的 JSON 数据")
+  }
+  try {
+    return JSON.parse(text) as T
+  } catch (err) {
+    const preview = text.length > 200 ? text.slice(0, 200) + "..." : text
+    throw new Error(`JSON 解析失败: ${err instanceof Error ? err.message : String(err)}。请求体: ${preview}`)
+  }
 }
 
 // -------------------------------------------------
@@ -78,12 +151,23 @@ export async function parseJsonBody<T = unknown>(request: Request): Promise<T> {
 // -------------------------------------------------
 
 /** 创建 SSE 流响应 */
-export function createSSEResponse(): { response: Response; send: (event: string, data: string) => void; close: () => void } {
+export function createSSEResponse(): {
+  response: Response
+  send: (event: string, data: string) => void
+  close: () => void
+  /** 客户端是否仍然连接 */
+  isConnected: () => boolean
+} {
   let controller: ReadableStreamDefaultController | null = null
+  let cancelled = false
 
   const stream = new ReadableStream({
     start(c) {
       controller = c
+    },
+    cancel() {
+      cancelled = true
+      controller = null
     },
   })
 
@@ -100,7 +184,12 @@ export function createSSEResponse(): { response: Response; send: (event: string,
 
   function send(event: string, data: string) {
     if (controller) {
-      controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`))
+      try {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`))
+      } catch {
+        cancelled = true
+        controller = null
+      }
     }
   }
 
@@ -111,7 +200,11 @@ export function createSSEResponse(): { response: Response; send: (event: string,
     }
   }
 
-  return { response, send, close }
+  function isConnected() {
+    return !cancelled && controller !== null
+  }
+
+  return { response, send, close, isConnected }
 }
 
 /** 关闭 SSE 流 */
@@ -132,7 +225,12 @@ export function createSSECloser(response: { response: Response; send: (event: st
 // 静态文件服务
 // -------------------------------------------------
 
-const STATIC_DIR = import.meta.dir + "/static/"
+// 静态文件目录：编译模式用 binary 旁边的 web/，开发模式用 dist/web/
+const DIST_WEB_DIR: string = (() => {
+  const compiledDir = import.meta.dir + "/web/"
+  if (existsSync(compiledDir)) return compiledDir
+  return import.meta.dir + "/../../dist/web/"
+})()
 
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -145,7 +243,25 @@ const MIME_TYPES: Record<string, string> = {
   ".ico": "image/x-icon",
 }
 
-/** 尝试返回静态文件，若失败则返回 null */
+// -------------------------------------------------
+// 认证辅助
+// -------------------------------------------------
+
+/** 从请求中提取 Bearer Token 并验证用户身份，未认证返回 401 */
+export function requireAuth(ctx: { request: Request }): { userId: string; userName: string } | Response {
+  const authHeader = ctx.request.headers.get("Authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return apiErrorResponse("UNAUTHORIZED", "请先登录", 401)
+  }
+  const token = authHeader.slice(7)
+  const user = rbac.getUserByToken(token)
+  if (!user) {
+    return apiErrorResponse("UNAUTHORIZED", "登录已过期，请重新登录", 401)
+  }
+  return { userId: user.id, userName: user.name }
+}
+
+/** 返回 React 构建产物的静态文件，不存在则 null */
 export async function serveStatic(pathname: string): Promise<Response | null> {
   // 规范化路径
   let filePath = pathname.replace(/^\/+/, "") || "index.html"
@@ -153,16 +269,15 @@ export async function serveStatic(pathname: string): Promise<Response | null> {
   // 安全检查：防止目录穿越
   if (filePath.includes("..")) return null
 
-  const fullPath = STATIC_DIR + filePath
-  const file = Bun.file(fullPath)
-  
-  const exists = await file.exists()
-  if (!exists) return null
+  const distPath = DIST_WEB_DIR + filePath
+  const distFile = Bun.file(distPath)
+  if (await distFile.exists()) {
+    const ext = "." + (filePath.split(".").pop() ?? "")
+    const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
+    return new Response(distFile, {
+      headers: { "Content-Type": contentType, ...CORS_HEADERS },
+    })
+  }
 
-  const ext = "." + (filePath.split(".").pop() ?? "")
-  const contentType = MIME_TYPES[ext] ?? "application/octet-stream"
-
-  return new Response(file, {
-    headers: { "Content-Type": contentType, ...CORS_HEADERS },
-  })
+  return null
 }

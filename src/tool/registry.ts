@@ -43,13 +43,13 @@ const toJSONSchema = <T>(schema: Schema.Schema<T>): Record<string, unknown> => {
 
 // 从工具输入中提取权限匹配用的资源路径
 const extractResource = (toolName: string, input: Record<string, unknown>): string => {
-  // 文件类工具：使用 filePath
+  // 文件类工具：使用 filePath（统一为正斜杠，确保 micromatch 跨平台一致）
   if ("filePath" in input && typeof input.filePath === "string") {
-    return input.filePath
+    return input.filePath.replace(/\\/g, "/")
   }
   // 搜索路径参数（grep 等）
   if ("path" in input && typeof input.path === "string") {
-    return input.path
+    return input.path.replace(/\\/g, "/")
   }
   // 命令类工具：只提取命令名（第一个词），避免路径中的 / 阻断 micromatch * 匹配
   if ("command" in input && typeof input.command === "string") {
@@ -116,6 +116,9 @@ export interface ToolRegistryService {
   
   /** 启用/禁用工具 */
   readonly setEnabled: (name: string, enabled: boolean) => Effect.Effect<void, ToolNotFoundError>
+
+  /** 清空所有已注册工具（用于热重载） */
+  readonly clear: () => Effect.Effect<void>
 }
 
 export class ToolRegistry extends Context.Tag("ToolRegistry")<
@@ -398,6 +401,12 @@ export const ToolRegistryLive = Layer.effect(
         })
       })
     
+    const clear = () =>
+      Effect.gen(function* () {
+        yield* Ref.set(toolsRef, new Map())
+        yield* Ref.set(enabledRef, new Set())
+      })
+
     return {
       register,
       registerAll,
@@ -407,7 +416,8 @@ export const ToolRegistryLive = Layer.effect(
       execute,
       executeBatch,
       list,
-      setEnabled
+      setEnabled,
+      clear,
     }
   })
 )

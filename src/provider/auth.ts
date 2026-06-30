@@ -3,14 +3,13 @@ import { Context, Effect, Layer, Option } from "effect"
 import { Config } from "../config/config.js"
 import { Env } from "../infra/env.js"
 import { Fs } from "../infra/fs-util.js"
+import { logger } from "../infra/logger.js"
 
 // ====================================================
 // 类型定义
 // ====================================================
 
 export interface AuthConfig {
-  /** 当前默认使用的 provider */
-  defaultProvider?: "openai" | "anthropic" | "deepseek" | "ollama"
   /** 各 provider 的认证配置 */
   providers: {
     openai?: {
@@ -55,7 +54,6 @@ export class Auth extends Context.Tag("Auth")<Auth, AuthService>() {}
 // ====================================================
 
 const DEFAULT_AUTH_CONFIG: AuthConfig = {
-  defaultProvider: "openai",
   providers: {}
 }
 
@@ -106,9 +104,9 @@ const loadAuthConfig = Effect.gen(function* () {
     const content = yield* fs.readFile(path)
     const fileConfig = yield* parseJSON<Partial<AuthConfig>>(content, path)
     authConfig = { ...authConfig, ...fileConfig }
-    console.log(`🔐 加载认证配置: ${path}`)
+    logger.info(`加载认证配置: ${path}`)
   } else {
-    console.log("🔐 未找到 auth.json，将使用环境变量")
+    logger.info("未找到 auth.json，将使用环境变量")
   }
   
   // 2. 环境变量覆盖（优先级更高）
@@ -204,9 +202,9 @@ export const AuthLive = Layer.effect(
 
     const getProviderConfig = (provider?: string) =>
       Effect.gen(function* () {
-        const targetProvider = provider ?? 
-          currentAuthConfig.defaultProvider ?? 
-          (yield* config.getvalue("model")).provider
+        // provider 选择优先级：显式传入 > try.json.model.provider
+        const targetProvider = (provider ??
+          (yield* config.getvalue("model")).provider) as string
         
         const providerConfig = currentAuthConfig.providers[targetProvider] as
           | ProviderEntry

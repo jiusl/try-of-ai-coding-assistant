@@ -1,5 +1,5 @@
 // src/agent/executor.ts
-import { Context, Effect, Layer, Queue, Stream, Fiber } from "effect"
+import { Context, Effect, Layer, Queue, Stream, Fiber, Duration, Cause } from "effect"
 import type { Message } from "../provider/types.js"
 import type { ToolCall, ToolResult, ToolContext } from "../tool/types.js"
 import { Provider } from "../provider/provider.js"
@@ -10,7 +10,19 @@ import { AgentRegistry } from "./registry.js"
 import { AutoMemory } from "../memory/auto-memory.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState, ExecutionPhase } from "./types.js"
-import { AgentExecutionError, MaxIterationsExceededError, NoToolsAvailableError } from "./types.js"
+import { AgentExecutionError, MaxIterationsExceededError, NoToolsAvailableError, AgentTimeoutError } from "./types.js"
+import {
+  type DelegationChain,
+  type SubtaskResult,
+  createDelegationChain,
+  pushToChain,
+  wouldCycle,
+  exceedsMaxDepth,
+  formatChain,
+  generateTaskId,
+  type SubtaskArtifact,
+} from "./protocol.js"
+import { defaultWorkspace, sanitizeWorkspace } from "../infra/workspace.js"
 // ====================================================
 // 服务接口
 // ====================================================
@@ -20,13 +32,13 @@ export interface AgentExecutorService {
   readonly execute: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore>
+  ) => Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError | AgentTimeoutError, ConfirmationStore>
   
   /** 执行 Agent（流式，推送执行状态）*/
   readonly executeStream: (
     agent: AgentConfig,
     options: AgentExecutionOptions
-  ) => Stream.Stream<ExecutionState, AgentExecutionError | MaxIterationsExceededError, ConfirmationStore>
+  ) => Stream.Stream<ExecutionState, AgentExecutionError | AgentTimeoutError, ConfirmationStore>
 }
 
 export class AgentExecutor extends Context.Tag("AgentExecutor")<
@@ -94,7 +106,7 @@ export const AgentExecutorLive = Layer.effect(
       agent: AgentConfig,
       options: AgentExecutionOptions,
       stateQueue?: Queue.Queue<ExecutionState>,
-      delegationChain?: Set<string>
+      delegationChain?: DelegationChain
     ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore> => {
       const {
         sessionId,
@@ -104,11 +116,18 @@ export const AgentExecutorLive = Layer.effect(
         onPhaseChange
       } = options
       const maxIterations = options.maxIterations ?? agent.maxIterations ?? DEFAULT_MAX_ITERATIONS
-      const chain = delegationChain ?? new Set<string>()
+      const rootTaskId = delegationChain?.rootTaskId ?? generateTaskId()
+      const chain: DelegationChain = delegationChain ?? createDelegationChain(rootTaskId, rootTaskId, MAX_DELEGATION_DEPTH)
       
       return Effect.gen(function* () {
         const startTime = Date.now()
-        const workspaceRoot = process.cwd()
+
+        // 从 session 读取工作目录，若无则使用默认值
+        const sessionInfo = yield* session.get(sessionId)
+        const workspaceRoot = Option.match(sessionInfo, {
+          onNone: () => defaultWorkspace(),
+          onSome: (info) => sanitizeWorkspace(info.workspace || defaultWorkspace()),
+        })
         
         const setPhase = (phase: ExecutionPhase, extra?: Partial<ExecutionState>) =>
           Effect.gen(function* () {
@@ -188,7 +207,16 @@ export const AgentExecutorLive = Layer.effect(
             ...(agent.temperature !== undefined ? { temperature: agent.temperature } : {}),
             ...(agent.maxTokens !== undefined ? { maxTokens: agent.maxTokens } : {}),
             ...(allToolDefs.length > 0 ? { tools: allToolDefs as any } : {}),
-          }) as Effect.Effect<any, Error>)
+          }) as Effect.Effect<any, Error>).pipe(
+            Effect.timeout(Duration.seconds(90)),
+            Effect.catchTag("TimeoutException", () =>
+              Effect.fail(new AgentTimeoutError({
+                agentId: agent.id,
+                operation: "LLM API 调用",
+                timeoutSeconds: 90,
+              }))
+            )
+          )
 
           // 捕获首轮 provider 路由警告
           if (response.warning && !executionWarning) {
@@ -293,21 +321,37 @@ export const AgentExecutorLive = Layer.effect(
 
               // 执行已批准的工具
               if (approvedCalls.length > 0) {
-                const results = yield* toolRegistry.executeBatch(approvedCalls, toolContext)
+                const results = yield* toolRegistry.executeBatch(approvedCalls, toolContext).pipe(
+                  Effect.timeout(Duration.seconds(60)),
+                  Effect.catchTag("TimeoutException", () =>
+                    Effect.fail(new AgentTimeoutError({
+                      agentId: agent.id,
+                      operation: `工具执行 (${approvedCalls.map(c => c.function.name).join(", ")})`,
+                      timeoutSeconds: 60,
+                    }))
+                  )
+                )
                 for (let i = 0; i < approvedCalls.length; i++) {
                   resultMap.set(approvedCalls[i]!.id, results[i]!)
                 }
               }
             }
             
-            // 执行 delegate 调用（递归运行子 Agent，带去重检测）
+            // 执行 delegate 调用（递归运行子 Agent，使用结构化委托协议）
             for (const dc of delegateCalls) {
+              const dcStartTime = Date.now()
+              const subTaskId = generateTaskId()
+              let dcIterations = 0
+              let dcToolCount = 0
+              let capturedAgentId = "?"
               try {
-                const { agentId, task } = parseDelegateArgs(dc.function.arguments)
+                const delegateArgs = parseDelegateArgs(dc.function.arguments)
+                const { agentId, task } = delegateArgs
+                capturedAgentId = agentId
                 
-                // 去重检测：防止循环委派
-                if (chain.has(agentId)) {
-                  const loop = [...chain, agentId].join(" → ")
+                // 去重检测：防止循环委派（使用 protocol.ts 工具函数）
+                if (wouldCycle(chain, agentId)) {
+                  const loop = formatChain(pushToChain(chain, agentId))
                   resultMap.set(dc.id, {
                     tool_call_id: dc.id,
                     role: "tool" as const,
@@ -319,11 +363,11 @@ export const AgentExecutorLive = Layer.effect(
                 }
                 
                 // 深度限制
-                if (chain.size >= MAX_DELEGATION_DEPTH) {
+                if (exceedsMaxDepth(chain)) {
                   resultMap.set(dc.id, {
                     tool_call_id: dc.id,
                     role: "tool" as const,
-                    content: `Delegate BLOCKED: maximum delegation depth (${MAX_DELEGATION_DEPTH}) reached. Complete the remaining work yourself.`,
+                    content: `Delegate BLOCKED: maximum delegation depth (${chain.maxDepth}) reached at ${formatChain(chain)}. Complete the remaining work yourself.`,
                     success: false,
                     error: "Max delegation depth exceeded",
                   })
@@ -341,37 +385,92 @@ export const AgentExecutorLive = Layer.effect(
                 if (stateQueue) {
                   yield* Queue.offer(stateQueue, {
                     phase: "processing" as const,
-                    content: `🤝 Delegating to ${agentId}...`,
+                    content: `🤝 Delegating to ${agentId} (task: ${subTaskId})...`,
                     iteration: iterations,
                   })
                 }
                 
-                // 构建子调用链（当前链 + 当前 agent）
-                const subChain = new Set(chain)
-                subChain.add(agent.id)
+                // 构建结构化任务描述（含上下文注入）
+                let structuredTask = `[Task ID: ${subTaskId}]\n\n${task}`
+                if (delegateArgs.context) {
+                  if (delegateArgs.context.file_paths && delegateArgs.context.file_paths.length > 0) {
+                    structuredTask += `\n\n## Relevant Files\n${delegateArgs.context.file_paths.map((f: string) => `- ${f}`).join("\n")}`
+                  }
+                  if (delegateArgs.context.notes) {
+                    structuredTask += `\n\n## Additional Notes\n${delegateArgs.context.notes}`
+                  }
+                  if (delegateArgs.context.preconditions && delegateArgs.context.preconditions.length > 0) {
+                    structuredTask += `\n\n## Preconditions\n${delegateArgs.context.preconditions.map((p: string) => `- [ ] ${p}`).join("\n")}`
+                  }
+                }
+                if (delegateArgs.expected_output) {
+                  structuredTask += `\n\n## Expected Output Format\n${delegateArgs.expected_output}`
+                }
+                if (delegateArgs.priority) {
+                  structuredTask += `\n\n## Priority\n${delegateArgs.priority.toUpperCase()}`
+                }
+                
+                // 构建子调用链（当前链 push 当前 agent）
+                const subChain = pushToChain(chain, agent.id)
                 
                 const subResult = yield* executeInternal(targetAgent, {
                   sessionId,
-                  userInput: task,
+                  userInput: structuredTask,
                   maxIterations: DELEGATE_MAX_ITERATIONS,
                   ...(onChunk !== undefined ? { onChunk } : {}),
                   ...(onToolCall !== undefined ? { onToolCall } : {}),
                   ...(onPhaseChange !== undefined ? { onPhaseChange } : {}),
                 }, stateQueue, subChain)
                 
+                dcIterations = subResult.iterations
+                dcToolCount = subResult.toolCalls.length
+                
+                // 格式化结构化委托结果
+                const artifacts: SubtaskArtifact[] = (subResult.artifacts ?? []).map((a: any) => ({
+                  type: a.type ?? "report",
+                  path: a.path ?? "",
+                  summary: a.summary ?? "",
+                }))
+                const subtaskResult: SubtaskResult = {
+                  taskId: subTaskId,
+                  status: subResult.success ? "success" : "failure",
+                  content: subResult.content,
+                  artifacts,
+                  iterations: dcIterations,
+                  toolCallCount: dcToolCount,
+                  durationMs: Date.now() - dcStartTime,
+                  ...(subResult.warning ? { error: subResult.warning } : {}),
+                  ...(subResult.followUpSuggestions ? { followUpSuggestions: subResult.followUpSuggestions } : {}),
+                }
+                
+                const resultSummary = [
+                  `## Sub-task Result`,
+                  `- **Agent**: ${agentId}`,
+                  `- **Task ID**: ${subTaskId}`,
+                  `- **Status**: ${subtaskResult.status}`,
+                  `- **Iterations**: ${dcIterations}`,
+                  `- **Tool Calls**: ${dcToolCount}`,
+                  `- **Duration**: ${subtaskResult.durationMs}ms`,
+                  ...(artifacts.length > 0 ? [`- **Artifacts**: ${artifacts.map(a => a.path).join(", ")}`] : []),
+                  `\n---\n`,
+                  subResult.content,
+                ].join("\n")
+                
                 resultMap.set(dc.id, {
                   tool_call_id: dc.id,
                   role: "tool" as const,
-                  content: `[Delegated to ${agentId}]\n${subResult.content}`,
+                  content: resultSummary,
                   success: true,
                 })
               } catch (e: any) {
+                const errMsg = e instanceof Error ? e.message : String(e)
+                console.error(`[Executor] Delegate 到 ${capturedAgentId} 执行失败:`, errMsg)
                 resultMap.set(dc.id, {
                   tool_call_id: dc.id,
                   role: "tool" as const,
-                  content: `Delegate failed: ${e.message || String(e)}`,
+                  content: `Delegate 到 "${capturedAgentId}" 执行失败 (${Date.now() - dcStartTime}ms): ${errMsg}`,
                   success: false,
-                  error: e.message || String(e),
+                  error: errMsg,
                 })
               }
             }
@@ -433,7 +532,13 @@ export const AgentExecutorLive = Layer.effect(
               yield* session.addToolMessage(sessionId, msg.tool_call_id, msg.content ?? "")
             }
           }
-          return yield* Effect.fail(new MaxIterationsExceededError({ maxIterations }))
+          const error = new MaxIterationsExceededError({ maxIterations })
+          yield* setPhase("error", {
+            iteration: iterations,
+            error: error.message,
+            content: `已执行 ${iterations} 轮，仍未完成。部分进度已保存，可以发送"继续"来恢复执行。`,
+          })
+          return yield* Effect.fail(error)
         }
         
         yield* setPhase("done", { iteration: iterations, content: finalContent })
@@ -450,6 +555,7 @@ export const AgentExecutorLive = Layer.effect(
           iterations,
           durationMs: Date.now() - startTime,
           tokensUsed: totalTokens,
+          success: true,
         }
         if (executionWarning !== undefined) {
           result.warning = executionWarning
@@ -460,6 +566,7 @@ export const AgentExecutorLive = Layer.effect(
           if (err instanceof AgentExecutionError) return err
           if (err instanceof MaxIterationsExceededError) return err
           if (err instanceof NoToolsAvailableError) return err
+          if (err instanceof AgentTimeoutError) return err
           const message = err instanceof Error ? err.message : String(err)
           return new AgentExecutionError({ agentId: agent.id, message })
         })
@@ -469,7 +576,7 @@ export const AgentExecutorLive = Layer.effect(
     const execute = (
       agent: AgentConfig,
       options: AgentExecutionOptions
-    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore> =>
+    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError | AgentTimeoutError, ConfirmationStore> =>
       executeInternal(agent, options)
     
     const executeStream = (

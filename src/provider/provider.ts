@@ -17,6 +17,7 @@ import {
   SDKNotInstalledError as SDKNotInstalledErrorClass,
   AuthError as AuthErrorClass
 } from "./types.js"
+import { logger } from "../infra/logger.js"
 import { Config } from "../config/config.js"
 import { Auth } from "./auth.js"
 
@@ -319,6 +320,42 @@ async function* generateOpenAIStreamChunks(
   yield { type: "done" } as StreamChunk
 }
 
+/** 增强 ProviderError，附加上下文信息 */
+function enrichProviderError(
+  error: unknown,
+  provider: ProviderType,
+  context: { model?: string; baseUrl?: string; endpoint?: string }
+): ProviderErrorClass {
+  if (error instanceof ProviderErrorClass) {
+    if (!error.message.includes("url") && !error.message.includes("URL")) {
+      const parts: string[] = []
+      if (context.baseUrl) parts.push(`目标地址: ${context.baseUrl}`)
+      if (context.model) parts.push(`模型: ${context.model}`)
+      if (parts.length > 0) {
+        const p: {
+          provider: ProviderType
+          message: string
+          statusCode?: number
+          cause?: unknown
+        } = {
+          provider: error.provider ?? provider,
+          message: `${error.message}（${parts.join("，")}）`,
+          cause: error.cause,
+        }
+        if (error.statusCode !== undefined) p.statusCode = error.statusCode
+        return new ProviderErrorClass(p)
+      }
+    }
+    return error
+  }
+  const msg = error instanceof Error ? error.message : String(error)
+  const parts: string[] = []
+  if (context.baseUrl) parts.push(`目标地址: ${context.baseUrl}`)
+  if (context.model) parts.push(`模型: ${context.model}`)
+  const fullMsg = parts.length > 0 ? `${msg}（${parts.join("，")}）` : msg
+  return new ProviderErrorClass({ provider, message: fullMsg, cause: error })
+}
+
 /** 将 Auth 层通用 Error 包装为 AuthError */
 const wrapAuthError = <A>(
   effect: Effect.Effect<A, Error>,
@@ -408,7 +445,7 @@ const resolveProvider = (
   if (configProvider && configProvider !== "llama") {
     if (detected && detected !== configProvider) {
       const warn = `模型名 "${model}" 看起来像 ${detected} 模型，但当前配置的 provider 是 ${configProvider}，将使用 ${configProvider} 调用。如遇错误请检查设置面板中的 provider 和模型名是否匹配。`
-      console.warn(`⚠️ [Provider] ${warn}`)
+      logger.warn(`[Provider] ${warn}`)
       return { provider: configProvider as ProviderType, warning: warn }
     }
     if (!detected) {
@@ -420,7 +457,7 @@ const resolveProvider = (
 
   if (!detected) {
     const warn = `模型名 "${model}" 未被识别为任何已知云端 provider，将兜底使用本地 llama.cpp 推理。请检查模型名是否正确，或在设置面板中明确选择 provider。`
-    console.warn(`⚠️ [Provider] ${warn}`)
+    logger.warn(`[Provider] ${warn}`)
     return { provider: "llama", warning: warn }
   }
 
@@ -494,12 +531,17 @@ export const ProviderLive = Layer.effect(
 
         const response = yield* Effect.tryPromise({
           try: () => client.chat.completions.create(req as unknown as OpenAIRequest),
-          catch: (error: any) => new ProviderErrorClass({
-            provider,
-            statusCode: error.status,
-            message: error.message,
-            cause: error
-          })
+          catch: (error: any) => {
+            const effectiveUrl = baseUrl || DEFAULT_BASE_URLS[provider] || undefined
+            const ctx: { model?: string; baseUrl?: string } = { model }
+            if (effectiveUrl) ctx.baseUrl = effectiveUrl
+            return enrichProviderError(new ProviderErrorClass({
+              provider,
+              statusCode: error.status,
+              message: error.message ?? String(error),
+              cause: error,
+            }), provider, ctx)
+          },
         })
         return yield* parseOpenAIResponse(response, provider)
       })
@@ -539,12 +581,16 @@ export const ProviderLive = Layer.effect(
 
         const response = yield* Effect.tryPromise({
           try: () => client.messages.create(req as unknown as AnthropicRequest),
-          catch: (error: any) => new ProviderErrorClass({
-            provider: "anthropic",
-            statusCode: error.status,
-            message: error.message,
-            cause: error
-          })
+          catch: (error: any) => {
+            const ctx: { model?: string; baseUrl?: string } = { model }
+            if (baseUrl) ctx.baseUrl = baseUrl
+            return enrichProviderError(new ProviderErrorClass({
+              provider: "anthropic",
+              statusCode: error.status,
+              message: error.message ?? String(error),
+              cause: error,
+            }), "anthropic", ctx)
+          },
         })
 
         return {
@@ -595,12 +641,17 @@ export const ProviderLive = Layer.effect(
 
           const streamResponse = yield* Effect.tryPromise({
             try: () => client.chat.completions.create(req as unknown as OpenAIRequest),
-            catch: (error: any) => new ProviderErrorClass({
-              provider,
-              statusCode: error.status,
-              message: error.message,
-              cause: error
-            })
+            catch: (error: any) => {
+              const effectiveUrl = baseUrl || DEFAULT_BASE_URLS[provider] || undefined
+              const ctx: { model?: string; baseUrl?: string } = { model }
+              if (effectiveUrl) ctx.baseUrl = effectiveUrl
+              return enrichProviderError(new ProviderErrorClass({
+                provider,
+                statusCode: error.status,
+                message: error.message ?? String(error),
+                cause: error,
+              }), provider, ctx)
+            },
           })
 
           return Stream.fromAsyncIterable(
@@ -651,12 +702,16 @@ export const ProviderLive = Layer.effect(
 
           const streamResponse = yield* Effect.tryPromise({
             try: () => client.messages.create(req as unknown as AnthropicRequest),
-            catch: (error: any) => new ProviderErrorClass({
-              provider: "anthropic",
-              statusCode: error.status,
-              message: error.message,
-              cause: error
-            })
+            catch: (error: any) => {
+              const ctx: { model?: string; baseUrl?: string } = { model }
+              if (baseUrl) ctx.baseUrl = baseUrl
+              return enrichProviderError(new ProviderErrorClass({
+                provider: "anthropic",
+                statusCode: error.status,
+                message: error.message ?? String(error),
+                cause: error,
+              }), "anthropic", ctx)
+            },
           })
 
           async function* gen(): AsyncGenerator<StreamChunk> {
@@ -728,7 +783,7 @@ export const ProviderLive = Layer.effect(
     ): Effect.Effect<GenerateResponse, ProviderErrorClass | SDKNotInstalledErrorClass> =>
       Effect.gen(function* () {
         const modelPath = yield* findLocalModelPath()
-        const systemMsg: string | undefined = messages.find((m: Message) => m.role === "system")?.content ?? undefined
+        const systemMsg: string | undefined = messages.find((m: Message) => m.role === "system")?.content || undefined
         const { session, dispose } = yield* getLlamaSession(modelPath, systemMsg)
         try {
           const prompt: string = messagesToPrompt(messages.filter((m: Message) => m.role !== "system"))
@@ -757,7 +812,7 @@ export const ProviderLive = Layer.effect(
       Stream.unwrap(
         Effect.gen(function* () {
           const modelPath = yield* findLocalModelPath()
-          const systemMsg: string | undefined = messages.find((m: Message) => m.role === "system")?.content ?? undefined
+          const systemMsg: string | undefined = messages.find((m: Message) => m.role === "system")?.content || undefined
           const { session, dispose } = yield* getLlamaSession(modelPath, systemMsg)
           const prompt: string = messagesToPrompt(messages.filter((m: Message) => m.role !== "system"))
 

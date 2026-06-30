@@ -1,0 +1,44 @@
+# ====================================================
+# Try — Docker Compose 一键部署
+# ====================================================
+
+version: "3.8"
+
+services:
+  try:
+    build: .
+    container_name: try-server
+    ports:
+      - "${TRY_PORT:-3456}:3456"
+    environment:
+      - TRY_LOG_LEVEL=${TRY_LOG_LEVEL:-info}
+      # LLM API Keys（也可通过 auth.json 配置）
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+    volumes:
+      # 配置文件（挂载到宿主机，方便修改）
+      - ./try.json:/app/try.json
+      - ./auth.json:/app/auth.json
+      # 数据库持久化
+      - ./data:/app/data
+      # 工作目录（Agent 产出的文件存放处）
+      - ./workspace:/app/workspace
+      # 本地模型（可选，体积大建议单独挂载）
+      - ./model:/app/model
+      # 用户自定义工具和技能
+      - ./tools/user:/app/tools/user
+      - ./skills/user:/app/skills/user
+    restart: unless-stopped
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M

@@ -22,10 +22,11 @@ function pathToRegex(pattern: string): { regex: RegExp; paramNames: string[] } {
 }
 
 /** 预编译的路由条目 */
-interface CompiledRoute {
+export interface CompiledRoute {
   method: HttpMethod
   regex: RegExp
   paramNames: string[]
+  pattern: string
   handler: Route["handler"]
 }
 
@@ -36,7 +37,38 @@ export class Router {
   /** 注册路由 */
   add(method: HttpMethod, path: string, handler: Route["handler"]): this {
     const { regex, paramNames } = pathToRegex(path)
-    this.routes.push({ method, regex, paramNames, handler })
+    this.routes.push({ method, regex, paramNames, pattern: path, handler })
+    return this
+  }
+
+  /**
+   * 注册带 API 版本前缀的路由
+   * 例如: apiGet("/chat", handler) → 注册 GET /api/v1/chat
+   * 同时保留无版本路径 GET /api/chat 作为兼容
+   */
+  apiGet(path: string, handler: Route["handler"]) {
+    this.get(`/api/v1${path}`, handler)
+    this.get(`/api${path}`, handler)  // 兼容旧版本
+    return this
+  }
+  apiPost(path: string, handler: Route["handler"]) {
+    this.post(`/api/v1${path}`, handler)
+    this.post(`/api${path}`, handler)
+    return this
+  }
+  apiPut(path: string, handler: Route["handler"]) {
+    this.put(`/api/v1${path}`, handler)
+    this.put(`/api${path}`, handler)
+    return this
+  }
+  apiDelete(path: string, handler: Route["handler"]) {
+    this.delete(`/api/v1${path}`, handler)
+    this.delete(`/api${path}`, handler)
+    return this
+  }
+  apiPatch(path: string, handler: Route["handler"]) {
+    this.patch(`/api/v1${path}`, handler)
+    this.patch(`/api${path}`, handler)
     return this
   }
 
@@ -46,6 +78,11 @@ export class Router {
   put(path: string, handler: Route["handler"]) { return this.add("PUT", path, handler) }
   delete(path: string, handler: Route["handler"]) { return this.add("DELETE", path, handler) }
   patch(path: string, handler: Route["handler"]) { return this.add("PATCH", path, handler) }
+
+  /** 获取所有已编译路由（只读） */
+  getAll(): ReadonlyArray<CompiledRoute> {
+    return this.routes
+  }
 
   /** 匹配请求并返回 handler + 参数，找不到返回 null */
   match(method: string, pathname: string): { handler: Route["handler"]; ctx: RequestContext } | null {

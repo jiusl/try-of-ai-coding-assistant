@@ -9,6 +9,7 @@ import { ProviderLive } from "../provider/provider.js"
 import { SessionLive } from "../session/session.js"
 import { PermissionLive } from "../permission/permission.js"
 import { RuleEngineLive } from "../permission/rule-engine.js"
+import { logger } from "../infra/logger.js"
 
 // ====================================================
 // AgentRegistry Live（带自动注册）
@@ -21,7 +22,7 @@ export const AgentRegistryLive = Layer.effect(
     for (const agent of BUILTIN_AGENTS) {
       yield* registry.register(agent)
     }
-    console.log(`🤖 注册了 ${BUILTIN_AGENTS.length} 个内置 Agent`)
+    logger.info(`注册了 ${BUILTIN_AGENTS.length} 个内置 Agent`)
     return registry
   })
 ).pipe(Layer.provide(BaseAgentRegistryLive))

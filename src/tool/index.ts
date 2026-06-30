@@ -4,6 +4,7 @@ import { ToolRegistry, ToolRegistryLive as BaseToolRegistryLive } from "./regist
 import { BUILTIN_TOOL_IMPLS } from "./builtin/index.js"
 import { ToolLoader, ToolLoaderLive } from "./loader.js"
 import { userToolToDefinition } from "./loader.js"
+import { logger } from "../infra/logger.js"
 
 // 带自动注册的 ToolRegistry Live：
 // 从 Loader 扫描 tools/{builtin,user,remote}/ → 转换 → 注册到 Registry
@@ -31,12 +32,12 @@ export const ToolRegistryLive = Layer.effect(
         else if (userDef.source === "user") userCount++
         else if (userDef.source === "remote") remoteCount++
       } catch (err) {
-        console.warn(`⚠  跳过工具 "${userDef.name}": ${String(err)}`)
+        logger.warn(`跳过工具 "${userDef.name}": ${String(err)}`)
       }
     }
 
-    console.log(
-      `🔧 注册了 ${builtinCount + userCount + remoteCount} 个工具` +
+    logger.info(
+      `注册了 ${builtinCount + userCount + remoteCount} 个工具` +
         ` (builtin: ${builtinCount}, user: ${userCount}, remote: ${remoteCount})`,
     )
 

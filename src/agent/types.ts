@@ -109,6 +109,12 @@ export interface AgentExecutionResult {
   }
   /** 警告信息，如 provider 路由异常 */
   warning?: string
+  /** 是否成功完成（委托协议使用） */
+  success?: boolean | undefined
+  /** 产生的产物列表（委托协议使用） */
+  artifacts?: Array<{ type: string; path: string; summary: string }> | undefined
+  /** 后续建议（委托协议使用） */
+  followUpSuggestions?: string[] | undefined
 }
 
 // ====================================================
@@ -117,9 +123,14 @@ export interface AgentExecutionResult {
 
 export class AgentNotFoundError extends Data.TaggedError("AgentNotFound")<{
   agentId: string
+  availableIds?: string | undefined
 }> {
   override get message(): string {
-    return `找不到 Agent "${this.agentId}"，请检查 Agent ID 是否正确或 Agent 是否已注册`
+    const base = `找不到 Agent "${this.agentId}"，请检查 Agent ID 是否正确或 Agent 是否已注册`
+    if (this.availableIds) {
+      return `${base}。${this.availableIds}。注意：内置 Agent 的 ID 格式为 "builtin:名称"（如 builtin:chat、builtin:coder）`
+    }
+    return `${base}。注意：内置 Agent 的 ID 格式为 "builtin:名称"（如 builtin:chat、builtin:coder）`
   }
 }
 
@@ -142,5 +153,17 @@ export class NoToolsAvailableError extends Data.TaggedError("NoToolsAvailable")<
 }> {
   override get message(): string {
     return `Agent "${this.agentId}" 配置了工具但所有工具均不可用，请检查工具注册状态或修改 Agent 的 toolNames 配置`
+  }
+}
+
+export class AgentTimeoutError extends Data.TaggedError("AgentTimeout")<{
+  agentId: string
+  /** 超时的操作描述，如 "LLM API 调用" / "工具执行" */
+  operation: string
+  /** 超时阈值（秒） */
+  timeoutSeconds: number
+}> {
+  override get message(): string {
+    return `Agent "${this.agentId}" ${this.operation} 超时 (${this.timeoutSeconds}s)，可能是网络问题或任务过于复杂`
   }
 }

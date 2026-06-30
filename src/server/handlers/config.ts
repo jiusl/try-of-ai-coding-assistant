@@ -14,6 +14,8 @@ import {
   successResponse,
   errorResponse,
   parseJsonBody,
+  requireAuth,
+  errorToStructuredResponse,
 } from "../middleware.js"
 
 // -------------------------------------------------
@@ -38,13 +40,10 @@ function isMaskedApiKey(value: string): boolean {
 const AUTH_PATHS = ["auth.json", ".auth.json", "config/auth.json", "secrets/auth.json"]
 
 // -------------------------------------------------
-// 辅助：catchAll
+// 辅助：catchAll → 结构化错误响应
 // -------------------------------------------------
-function catchToErrorResponse(status = 500): (err: unknown) => Effect.Effect<Response> {
-  return (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err)
-    return Effect.succeed(errorResponse(msg, status))
-  }
+function catchToErrorResponse(): (err: unknown) => Effect.Effect<Response> {
+  return (err: unknown) => Effect.succeed(errorToStructuredResponse(err))
 }
 
 // -------------------------------------------------
@@ -53,7 +52,10 @@ function catchToErrorResponse(status = 500): (err: unknown) => Effect.Effect<Res
 export function registerConfigRoutes(router: Router): void {
 
   // GET /api/config — 获取当前模型 / Provider / API Key 配置（Key 脱敏）
-  router.get("/api/config", async (_ctx) => {
+  router.get("/api/config", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
+
     const result: Response = await AppRuntime.runPromise(
       (Effect.gen(function* () {
         const configSvc = yield* Config
@@ -115,6 +117,9 @@ export function registerConfigRoutes(router: Router): void {
 
   // PUT /api/config — 更新模型 / Provider / API Key 配置
   router.put("/api/config", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
+
     const body = await parseJsonBody<{
       model?: {
         provider?: string
@@ -149,7 +154,7 @@ export function registerConfigRoutes(router: Router): void {
         // ---- 2. 更新 Provider API Key / Base URL ----
         if (body.providers) {
           // 读取现有 auth.json
-          let authData: Record<string, unknown> = { defaultProvider: (yield* configSvc.get()).model.provider, providers: {} }
+          let authData: Record<string, unknown> = { providers: {} }
           let foundAuthPath: string | null = null
 
           for (const authPath of AUTH_PATHS) {

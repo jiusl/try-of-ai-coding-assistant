@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: file_exists
+  type: script
+  entry: main.py
 parameters:
   path:
     type: string

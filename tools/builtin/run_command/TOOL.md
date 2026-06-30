@@ -11,8 +11,8 @@ sideEffect: write
 safeToRetry: false
 defaultEnabled: true
 execution:
-  type: internal
-  impl: run_command
+  type: script
+  entry: main.py
   requireConfirm: true
 parameters:
   command:

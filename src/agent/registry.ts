@@ -61,7 +61,17 @@ export const AgentRegistryLive = Layer.effect(
         const agents = yield* Ref.get(agentsRef)
         const agent = agents.get(id)
         if (!agent) {
-          return yield* Effect.fail(new AgentNotFoundError({ agentId: id }))
+          // 收集所有已注册的 Agent ID 用于错误提示
+          const availableIds = Array.from(agents.keys()).sort()
+          const hint = availableIds.length > 0
+            ? `可用的 Agent ID: ${availableIds.join(", ")}`
+            : "当前没有注册任何 Agent"
+          return yield* Effect.fail(new AgentNotFoundError({
+            agentId: id,
+            availableIds: availableIds.length > 0
+              ? `可用的 Agent ID: ${availableIds.join(", ")}`
+              : "当前没有注册任何 Agent",
+          }))
         }
         return agent
       })

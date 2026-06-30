@@ -1,61 +1,17 @@
 // src/tool/builtin/index.ts
+// 所有内置工具已全部迁移到 Python 脚本：
+//   tools/builtin/<tool>/main.py + TOOL.md (type: script)
+// TS 实现文件（*.ts）已不再被使用，可清理。
 import type { ToolDefinition } from "../types.js"
-import { ReadTool } from "./read.js"
-import { WriteTool } from "./write.js"
-import { EditTool } from "./edit.js"
-import { RunCommandTool } from "./bash.js"
-import { ReadCommandTool } from "./read_command.js"
-import { GlobTool } from "./glob.js"
-import { GrepTool } from "./grep.js"
-import { ThinkTool } from "./think.js"
-import { FetchWebpageTool } from "./fetch.js"
-import { FileExistsTool } from "./file_exists.js"
-import { ListSkillsTool, GetSkillTool } from "./skill.js"
-import { RecallTool } from "./recall.js"
-import { RememberTool } from "./remember.js"
 
-/** 所有内置工具 */
-export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = [
-  ReadTool,
-  WriteTool,
-  EditTool,
-  RunCommandTool,
-  ReadCommandTool,
-  GlobTool,
-  GrepTool,
-  ThinkTool,
-  FetchWebpageTool,
-  FileExistsTool,
-  ListSkillsTool,
-  GetSkillTool,
-  RecallTool,
-  RememberTool,
-]
+/** 所有内置工具（已全部迁移到 Python 脚本，此数组为空） */
+export const BUILTIN_TOOLS: ToolDefinition<any, any>[] = []
 
 /**
  * 内置工具实现映射表：toolName → ToolDefinition。
- * ToolLoader 扫描 tools/builtin/ 下的 TOOL.md（execution.type=internal）
- * 时通过此表查找 TS 实现。
+ * 所有工具现已使用 type=script，不再有 type=internal，此表为空。
+ * 保留以保持 API 兼容（ToolLoader 仍然传入此表）。
  */
-export const BUILTIN_TOOL_IMPLS: ReadonlyMap<string, ToolDefinition<any, any>> = new Map(
-  BUILTIN_TOOLS.map((t) => [t.name, t]),
-)
+export const BUILTIN_TOOL_IMPLS: ReadonlyMap<string, ToolDefinition<any, any>> = new Map()
 
-// 重新导出
-export {
-  ReadTool,
-  WriteTool,
-  EditTool,
-  RunCommandTool,
-  ReadCommandTool,
-  GlobTool,
-  GrepTool,
-  ThinkTool,
-  FetchWebpageTool,
-  FileExistsTool,
-  ListSkillsTool,
-  GetSkillTool,
-  RecallTool,
-  RememberTool,
-}
 export { DelegateJSONSchema, DELEGATE_TOOL_NAME } from "./delegate.js"

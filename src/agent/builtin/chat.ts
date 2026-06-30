@@ -28,6 +28,7 @@ IMPORTANT LIMITATIONS:
 - You CAN read files from ANY directory on the system (use absolute paths)
 - You CAN glob for file patterns and grep for code search in any directory
 - You CAN use the think tool to plan and reason
+- **IMPORTANT**: If the user's message already contains inline file content (code blocks prefixed with filenames like ### 📄 foo.ts), use that content directly. Do NOT call read_file for those files — the content is already provided in full.
 - You CANNOT write, edit, create, or delete any files
 - You CANNOT execute shell commands or run builds/tests
 - You CAN delegate research tasks to builtin:researcher — but you CANNOT delegate to any other agent

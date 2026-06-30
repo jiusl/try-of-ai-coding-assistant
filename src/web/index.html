@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Try — AI 编程助手</title>
+    <style>
+      html, body, #root { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0a0a0a; color: #eee; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+      /* ──── 暗色滚动条 ──── */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+      /* ──── 消息入场动画 ──── */
+      @keyframes messageIn {
+        from { opacity: 0; transform: translateY(12px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      /* 侧栏滑入 */
+      @keyframes slideInLeft {
+        from { transform: translateX(-100%); }
+        to { transform: translateX(0); }
+      }
+      @keyframes slideOutLeft {
+        from { transform: translateX(0); }
+        to { transform: translateX(-100%); }
+      }
+
+      /* ──── API Docs 链接 ──── */
+      .api-docs-link {
+        font-size: 0.875rem; color: #a0a0b0; padding: 4px 12px;
+        border-radius: 6px; text-decoration: none; line-height: 2;
+        transition: background 0.15s, color 0.15s;
+      }
+      .api-docs-link:hover { background: #333; color: #fff; }
+
+      /* ──── 选中文本 ──── */
+      ::selection { background: rgba(59, 130, 246, 0.3); color: #fff; }
+
+      /* ──── 响应式：移动端侧栏覆盖层 ──── */
+      @media (max-width: 768px) {
+        .sidebar {
+          position: fixed !important;
+          top: 0; left: 0; bottom: 0;
+          z-index: 200 !important;
+          transform: translateX(-100%);
+          transition: transform 0.25s ease;
+          width: 280px !important;
+          min-width: 280px !important;
+        }
+        .sidebar.open {
+          transform: translateX(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

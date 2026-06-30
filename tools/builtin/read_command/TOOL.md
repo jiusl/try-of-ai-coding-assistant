@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: read_command
+  type: script
+  entry: main.py
 parameters:
   command:
     type: string

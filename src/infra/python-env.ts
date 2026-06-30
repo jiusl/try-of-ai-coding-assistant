@@ -79,7 +79,7 @@ async function commandExists(cmd: string): Promise<boolean> {
   try {
     const { exec } = await import("child_process")
     const { promisify } = await import("util")
-    await promisify(exec)(whichCmd, { shell: true })
+    await promisify(exec)(whichCmd, { shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh" })
     return true
   } catch {
     return false
@@ -133,7 +133,7 @@ export function ensureRequirements(cwd: string): Effect.Effect<void, never, neve
         const { exec } = await import("child_process")
         const { promisify } = await import("util")
         const execAsync = promisify(exec)
-        await execAsync(installCmd, { cwd, timeout: 120000, shell: true })
+        await execAsync(installCmd, { cwd, timeout: 120000, shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh" })
         // 安装成功后写入标记文件
         await fs.writeFile(markerPath, new Date().toISOString(), "utf-8")
         installedCache.add(cwd)
@@ -183,12 +183,12 @@ async function resolvePip(cwd: string): Promise<string> {
 export function preparePythonEnv(cwd: string): Effect.Effect<string, never, never> {
   return Effect.gen(function* () {
     yield* ensureRequirements(cwd)
+    const fallback = process.platform === "win32" ? "python" : "python3"
     return yield* Effect.tryPromise({
       try: () => resolvePython(cwd),
-      catch: () => {
-        // 兜底
-        return process.platform === "win32" ? "python" : "python3"
-      }
-    })
+      catch: (err) => new Error(`Failed to resolve Python: ${String(err)}`),
+    }).pipe(
+      Effect.catchAll(() => Effect.succeed(fallback))
+    )
   })
 }

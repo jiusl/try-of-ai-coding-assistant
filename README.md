@@ -27,13 +27,16 @@
 
 - 🧠 **多模型支持** — OpenAI / Anthropic / DeepSeek / Ollama / 本地 llama.cpp
 - 🤖 **8 个内置 Agent** — Chat / Builder / Coder / Reviewer / Tester / Refactor / Researcher / Orchestrator
-- 🔧 **14 个内置工具** — 读写文件、代码搜索、命令执行、网页抓取、记忆系统
-- 🔐 **权限控制** — 基于规则的细粒度工具权限，支持敏感操作确认
+- 🔧 **14 个内置工具** — 读写文件、代码搜索、命令执行、网页抓取、记忆系统（Python 实现）
+- 📁 **Workspace 管理** — 会话级别工作目录隔离，前端实时切换，持久化存储
+- 🔐 **权限控制** — 基于规则的细粒度工具权限，支持敏感操作确认，RBAC 角色管理
 - 📚 **Skill 系统** — 可扩展的知识注入，内置架构指南、代码审查规范、PR 模板
 - 🧠 **记忆系统** — 自动压缩与嵌入检索，跨会话记忆上下文
 - 🌐 **Web UI + CLI** — 支持终端对话和浏览器界面两种交互方式
 - 📡 **SSE 流式推送** — 实时流式输出，支持工具调用可视化
 - 🏗️ **Effect-TS 架构** — 函数式依赖注入、类型安全的错误处理
+- 🐳 **Docker 支持** — 提供完整 Docker / docker-compose 一键部署方案
+- 🛡️ **License 授权** — RSA 公钥签名离线验证，支持有效期和设备绑定
 
 ---
 
@@ -267,9 +270,11 @@ bun start -- web -p 8080  # 自定义端口
 
 浏览器打开 `http://127.0.0.1:3456`，提供完整的对话管理界面：
 - 📝 多会话管理，支持会话切换和 AI 自动命名
+- 📁 Workspace 选择器 — 会话级别的工作目录隔离与持久化
 - 🤖 Agent 选择和动态切换
 - 🔧 工具调用实时可视化
 - 📡 SSE 流式输出
+- 🎨 Chakra UI v3 组件库，响应式布局
 
 ---
 
@@ -322,6 +327,26 @@ Builder → Researcher (查资料)
 | `get_skill` | 知识 | 获取 Skill 详情 |
 | `recall` | 记忆 | 回忆历史对话 |
 | `remember` | 记忆 | 保存重要信息 |
+
+---
+
+## Workspace 管理
+
+每个会话可以拥有独立的工作目录（workspace），Agent 的所有文件操作都在该目录下进行：
+
+- **默认工作路径**: 项目根目录下的 `workspace/` 文件夹（自动创建）
+- **会话级隔离**: 不同会话可设置不同的 workspace，互不干扰
+- **前端切换**: Web UI 顶部 WorkspacePicker 组件实时切换
+- **持久化存储**: workspace 路径写入 SQLite sessions 表，重启不丢失
+- **安全校验**: 路径逃逸检测，禁止访问 workspace 之外的目录
+
+### API 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/workspace` | 获取默认 workspace 和子目录列表 |
+| `GET` | `/api/sessions/:id/workspace` | 获取会话的 workspace 配置 |
+| `PUT` | `/api/sessions/:id/workspace` | 更新会话的 workspace 路径 |
 
 ---
 
@@ -402,19 +427,24 @@ try/
 │   ├── index.ts              # 入口，注册 CLI
 │   ├── agent/                # Agent 系统
 │   │   ├── agent.ts          # Agent 服务（run/runAuto）
-│   │   ├── executor.ts       # 执行引擎（迭代循环）
+│   │   ├── executor.ts       # 执行引擎（迭代循环，含 workspace 支持）
 │   │   ├── registry.ts       # Agent 注册表
 │   │   ├── types.ts          # 类型定义
-│   │   └── builtin/          # 内置 Agent
+│   │   ├── protocol.ts       # Agent 间通信协议
+│   │   └── builtin/          # 内置 Agent (8 个)
 │   ├── tool/                 # 工具系统
 │   │   ├── registry.ts       # 工具注册表
+│   │   ├── loader.ts         # Python 工具加载器
 │   │   ├── types.ts          # 类型定义
-│   │   └── builtin/          # 内置工具
+│   │   └── builtin/          # 内置工具 Python 入口
 │   ├── session/              # 会话管理
-│   │   └── session.ts        # SQLite 持久化
+│   │   ├── session.ts        # 会话服务接口
+│   │   ├── live.ts           # SQLite 持久化实现
+│   │   └── types.ts          # 会话类型定义
 │   ├── provider/             # LLM 供应商
 │   │   ├── provider.ts       # 统一接口
-│   │   └── auth.ts           # 认证管理
+│   │   ├── auth.ts           # 认证管理
+│   │   └── types.ts          # 类型定义
 │   ├── skill/                # Skill 系统
 │   │   ├── loader.ts         # Skill 加载器
 │   │   ├── registry.ts       # Skill 注册表
@@ -425,21 +455,71 @@ try/
 │   │   └── embedding.ts      # 嵌入检索
 │   ├── permission/           # 权限系统
 │   │   ├── permission.ts     # 权限检查
-│   │   └── rule-engine.ts    # 规则引擎
+│   │   ├── rule-engine.ts    # 规则引擎
+│   │   └── types.ts          # 类型定义
 │   ├── config/               # 配置管理
 │   ├── server/               # Web 服务
-│   │   ├── handler/          # API 路由处理
-│   │   └── static/           # 前端静态资源
+│   │   ├── index.ts          # 服务入口
+│   │   ├── router.ts         # 路由注册
+│   │   ├── middleware.ts     # 全局中间件
+│   │   ├── websocket.ts      # WebSocket 实时通信
+│   │   ├── handlers/         # API 路由处理
+│   │   │   ├── agent.ts      # Agent 调用
+│   │   │   ├── chat.ts       # 流式对话
+│   │   │   ├── session.ts    # 会话管理
+│   │   │   ├── workspace.ts  # Workspace API
+│   │   │   ├── config.ts     # 配置管理
+│   │   │   ├── auth.ts       # 认证授权
+│   │   │   └── ...
+│   │   └── static/           # 前端静态资源（构建产物）
 │   ├── cli/                  # CLI 界面
 │   │   ├── repl.ts           # 交互式 REPL
 │   │   └── commands/         # 命令定义
 │   ├── infra/                # 基础设施
+│   │   ├── database.ts       # 数据库连接
+│   │   ├── env.ts            # 环境变量
+│   │   ├── fs-util.ts        # 文件系统工具
+│   │   ├── python-env.ts     # Python 环境管理
+│   │   ├── workspace.ts      # Workspace 管理
+│   │   ├── license.ts        # License 验证
+│   │   ├── logger.ts         # 结构化日志
+│   │   ├── metrics.ts        # Prometheus 指标
+│   │   └── ...
+│   ├── web/                  # React 前端源码
+│   │   ├── src/
+│   │   │   ├── App.tsx
+│   │   │   ├── components/
+│   │   │   │   └── WorkspacePicker.tsx
+│   │   │   └── ...
+│   │   └── vite.config.ts
 │   └── effect/               # Effect-TS 工具层
+├── tools/                    # 工具实现（Python + TOOL.md）
+│   ├── builtin/              # 内置工具（14 个）
+│   │   ├── _shared/          # Windows 编码兼容层
+│   │   ├── edit_file/
+│   │   ├── read_file/
+│   │   ├── write_file/
+│   │   ├── run_command/
+│   │   ├── grep/
+│   │   ├── glob/
+│   │   └── ...
+│   └── user/                 # 用户自定义工具
 ├── skills/                   # Skill 定义
-├── model/                    # 本地模型文件
+│   ├── builtin/
+│   ├── user/
+│   └── remote/
+├── model/                    # 本地模型文件 (.gguf)
+├── scripts/                  # 构建 & 工具脚本
+│   ├── build-backend.ts      # 后端编译 + 二进制打包
+│   └── ...
+├── dist/                     # 构建产物
 ├── try.json                  # 项目配置
 ├── auth.example.json         # 认证配置模板
 ├── auth.json                 # 认证配置（不提交）
+├── Dockerfile                # Docker 镜像
+├── docker-compose.yml        # Docker 一键部署
+├── .dockerignore
+├── DEPLOYMENT.md             # 部署指南
 ├── package.json
 └── tsconfig.json
 ```
@@ -456,17 +536,36 @@ try/
 | CLI | [Commander](https://github.com/tj/commander.js) |
 | 数据库 | SQLite (bun:sqlite, 含 FTS5 全文搜索) |
 | LLM SDK | OpenAI / Anthropic / node-llama-cpp |
-| 前端 | Vanilla JS + SSE (无框架，零构建) |
+| 前端 | React 19 + Vite 6 + Chakra UI v3 + SSE 流式 |
+| 工具执行 | Python ≥3.10 (JSON stdin/stdout 协议) |
 | 终端着色 | [Chalk](https://github.com/chalk/chalk) |
+| 容器化 | Docker + docker-compose |
 
 ### 开发命令
 
 ```bash
 bun test              # 运行测试
 bun run typecheck     # TypeScript 类型检查
-bun run build         # 构建
+bun run build         # 构建 JS bundle
+bun run build:compile # 编译独立二进制 (.exe)
 bun run dev           # 开发模式（热重载）
+bun run build:web     # 构建前端
 ```
+
+### Docker 部署
+
+```bash
+# 构建镜像
+docker build -t try:latest .
+
+# docker-compose 一键部署
+cp auth.example.json auth.json  # 填入 API Key 后
+docker-compose up -d
+
+# 访问 http://localhost:3456
+```
+
+> 详细部署指南（裸机 / Nginx 反向代理 / Systemd / K8s / 监控）见 [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ---
 

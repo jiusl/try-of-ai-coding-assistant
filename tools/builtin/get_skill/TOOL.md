@@ -11,8 +11,8 @@ sideEffect: read
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: get_skill
+  type: script
+  entry: main.py
 parameters:
   name:
     type: string

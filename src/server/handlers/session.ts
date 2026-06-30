@@ -14,19 +14,19 @@ import {
   successResponse,
   errorResponse,
   parseJsonBody,
+  requireAuth,
+  apiErrorResponse,
+  errorToStructuredResponse,
 } from "../middleware.js"
 import type { CreateSessionRequest } from "../types.js"
 import type { SessionInfo, SessionWithMessagesInfo } from "../../session/session.js"
+import { subscription } from "../../infra/subscription.js"
 
 // -------------------------------------------------
-// 辅助：catchAll error → errorResponse
-// Effect.gen + runPromise 嵌套导致 TS 推断失败，用 any 绕过
+// 辅助：catchAll error → 结构化错误响应
 // -------------------------------------------------
-function catchToErrorResponse(status = 500): (err: unknown) => Effect.Effect<Response> {
-  return (err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err)
-    return Effect.succeed(errorResponse(msg, status))
-  }
+function catchToErrorResponse(): (err: unknown) => Effect.Effect<Response> {
+  return (err: unknown) => Effect.succeed(errorToStructuredResponse(err))
 }
 
 // -------------------------------------------------
@@ -37,6 +37,10 @@ export function registerSessionRoutes(router: Router): void {
   
   // GET /api/sessions — 列出所有会话
   router.get("/api/sessions", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
+    const userId = authResult.userId
+
     const limit = parseInt(ctx.query.get("limit") ?? "50")
     const offset = parseInt(ctx.query.get("offset") ?? "0")
 
@@ -44,7 +48,7 @@ export function registerSessionRoutes(router: Router): void {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Effect.gen(function* () {
         const svc = yield* Session
-        const sessions = yield* svc.list({ limit, offset })
+        const sessions = yield* svc.list({ limit, offset, userId })
         return successResponse<SessionInfo[]>(sessions)
       }) as any).pipe(
         Effect.catchAll(catchToErrorResponse())
@@ -55,6 +59,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // GET /api/sessions/:id — 获取会话详情（含消息）
   router.get("/api/sessions/:id", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
 
     const result: Response = await AppRuntime.runPromise(
@@ -75,13 +81,22 @@ export function registerSessionRoutes(router: Router): void {
 
   // POST /api/sessions — 创建新会话
   router.post("/api/sessions", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
+    const userId = authResult.userId
     const body = await parseJsonBody<CreateSessionRequest>(ctx.request).catch(() => ({}))
+
+    // 检查会话数量配额
+    const quota = subscription.checkQuota(userId, "session")
+    if (!quota.allowed) {
+      return apiErrorResponse("QUOTA_EXCEEDED", quota.reason ?? "会话数已达上限", 429, quota.resetAt ? { resetAt: quota.resetAt } : undefined)
+    }
 
     const result: Response = await AppRuntime.runPromise(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Effect.gen(function* () {
         const svc = yield* Session
-        const created = yield* svc.create(body)
+        const created = yield* svc.create({ ...body, userId })
         return successResponse<SessionInfo>(created, 201)
       }) as any).pipe(
         Effect.catchAll(catchToErrorResponse())
@@ -92,6 +107,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // PUT /api/sessions/:id/title — 更新标题
   router.put("/api/sessions/:id/title", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
     const body = await parseJsonBody<{ title: string }>(ctx.request)
 
@@ -110,6 +127,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // DELETE /api/sessions/:id — 删除会话
   router.delete("/api/sessions/:id", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
 
     const result: Response = await AppRuntime.runPromise(
@@ -127,6 +146,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // PUT /api/sessions/:id/rename — 重命名会话
   router.put("/api/sessions/:id/rename", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
     const body = await parseJsonBody<{ title: string }>(ctx.request)
 
@@ -145,6 +166,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // PUT /api/sessions/:id/agent — 设置会话绑定的 Agent
   router.put("/api/sessions/:id/agent", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
     const body = await parseJsonBody<{ agentId: string }>(ctx.request)
 
@@ -163,6 +186,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // POST /api/sessions/:id/generate-title — AI 根据首条消息生成标题
   router.post("/api/sessions/:id/generate-title", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
 
     const result: Response = await AppRuntime.runPromise(
@@ -207,6 +232,8 @@ export function registerSessionRoutes(router: Router): void {
 
   // POST /api/sessions/:id/clear — 清空消息
   router.post("/api/sessions/:id/clear", async (ctx) => {
+    const authResult = requireAuth(ctx)
+    if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
 
     const result: Response = await AppRuntime.runPromise(

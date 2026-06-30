@@ -11,8 +11,8 @@ sideEffect: write
 safeToRetry: true
 defaultEnabled: true
 execution:
-  type: internal
-  impl: remember
+  type: script
+  entry: main.py
 parameters:
   content:
     type: string

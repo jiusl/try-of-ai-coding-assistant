@@ -1,7 +1,9 @@
 import { Context, Effect, Layer, Option } from "effect"
 import { Fs } from "../infra/fs-util.js"
 import { Env } from "../infra/env.js"
+import { logger } from "../infra/logger.js"
 import { mergeDeep } from "remeda"
+import { existsSync } from "fs"
 
 /** 模型配置 */
 export interface ModelConfig {
@@ -133,6 +135,11 @@ const loadConfig = Effect.gen(function* () {
   const fs = yield* Fs
   const env = yield* Env
 
+  // 0. 检测 .env 文件（Bun 运行时会自动加载，此处仅记录）
+  if (existsSync(".env")) {
+    logger.info("已检测到 .env 文件，Bun 将自动加载其中的环境变量")
+  }
+
   // 1. 尝试读取配置文件
   const configPathOption = yield* findConfigPath()
   let fileConfig: Partial<AppConfig> = {}
@@ -141,19 +148,56 @@ const loadConfig = Effect.gen(function* () {
     const path = configPathOption.value
     const content = yield* fs.readFile(path)
     fileConfig = yield* parseJSON<Partial<AppConfig>>(content, path)
-    console.log(`📄 加载配置文件: ${path}`)
+    logger.info(`加载配置文件: ${path}`)
   } else {
-    console.log("📄 未找到配置文件，使用默认配置")
+    logger.info("未找到配置文件，使用默认配置")
   }
 
-  // 2. 环境变量覆盖（可选）
-  // const envModel = yield* env.get("OPENCODE_MODEL")
-  // if (Option.isSome(envModel)) {
-  //   fileConfig.model = {
-  //     ...(fileConfig.model ?? DEFAULT_CONFIG.model),
-  //     model: envModel.value
-  //   }
-  // }
+  // 2. 环境变量覆盖（优先级高于配置文件）
+  // Provider 覆盖
+  const envProvider = yield* env.get("TRY_PROVIDER")
+  if (envProvider) {
+    fileConfig.model = {
+      ...(fileConfig.model ?? DEFAULT_CONFIG.model),
+      provider: envProvider as AppConfig["model"]["provider"],
+    }
+  }
+
+  // Model 覆盖
+  const envModel = yield* env.get("TRY_MODEL")
+  if (envModel) {
+    fileConfig.model = {
+      ...(fileConfig.model ?? DEFAULT_CONFIG.model),
+      model: envModel,
+    }
+  }
+
+  // Temperature 覆盖
+  const envTemp = yield* env.get("TRY_TEMPERATURE")
+  if (envTemp) {
+    const temp = parseFloat(envTemp)
+    if (!isNaN(temp)) {
+      fileConfig.model = {
+        ...(fileConfig.model ?? DEFAULT_CONFIG.model),
+        temperature: temp,
+      }
+    }
+  }
+
+  // Workspace 根目录覆盖
+  const envWorkspace = yield* env.get("TRY_WORKSPACE")
+  if (envWorkspace) {
+    fileConfig.workspaceRoot = envWorkspace
+  }
+
+  // Max conversation turns 覆盖
+  const envMaxTurns = yield* env.get("TRY_MAX_TURNS")
+  if (envMaxTurns) {
+    const turns = parseInt(envMaxTurns, 10)
+    if (!isNaN(turns) && turns > 0) {
+      fileConfig.maxConversationTurns = turns
+    }
+  }
 
   // 3. 合并配置
   const config = mergeConfig(DEFAULT_CONFIG, fileConfig)
@@ -195,7 +239,7 @@ export const ConfigLive = Layer.effect(
       reload: () => 
         Effect.gen(function* () {
         currentConfig = yield* loadConfig
-        console.log("🔄 配置已重新加载")
+        logger.info("配置已重新加载")
         return currentConfig
       }),
 
@@ -212,7 +256,7 @@ export const ConfigLive = Layer.effect(
           if (currentConfig.maxConversationTurns) toSave.maxConversationTurns = currentConfig.maxConversationTurns
           if (currentConfig.workspaceRoot) toSave.workspaceRoot = currentConfig.workspaceRoot
           yield* fs.writeFile(path, JSON.stringify(toSave, null, 2))
-          console.log(`💾 配置已保存到: ${path}`)
+          logger.info(`配置已保存到: ${path}`)
         })
     }
     

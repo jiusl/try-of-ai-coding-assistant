@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Try API — Swagger UI</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f1117; }
+
+    /* ── 顶栏 ── */
+    .swagger-ui .topbar {
+      background: #16181d;
+      border-bottom: 1px solid #2a2d35;
+    }
+    .swagger-ui .topbar .wrapper { padding: 8px 16px; }
+    .swagger-ui .topbar .download-url-wrapper { display: none; }
+    .swagger-ui .topbar a { color: #e0e0e0 !important; }
+
+    /* ── 信息区 ── */
+    .swagger-ui .info { margin: 20px 0; }
+    .swagger-ui .info .title { color: #e8eaed; font-size: 26px; }
+    .swagger-ui .info .description p,
+    .swagger-ui .info .description li { color: #9aa0a6; }
+    .swagger-ui .info a { color: #8ab4f8; }
+    .swagger-ui .info .base-url { color: #9aa0a6; }
+
+    /* ── 方案容器 ── */
+    .swagger-ui .scheme-container {
+      background: #1a1d24;
+      box-shadow: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 0 0 20px;
+    }
+    .swagger-ui .schemes-title { color: #9aa0a6; }
+
+    /* ── 标签 / 分组标题 ── */
+    .swagger-ui .opblock-tag {
+      color: #e8eaed;
+      border: none;
+      font-size: 18px;
+      padding: 8px 0;
+    }
+    .swagger-ui .opblock-tag:hover { background: #1e2130; border-radius: 6px; }
+    .swagger-ui .opblock-tag small { color: #9aa0a6; }
+
+    /* ── 操作卡片 ── */
+    .swagger-ui .opblock {
+      background: #1a1d24;
+      border: 1px solid #2a2d35;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      box-shadow: none;
+    }
+    .swagger-ui .opblock .opblock-summary {
+      border: none;
+      padding: 8px 16px;
+    }
+    .swagger-ui .opblock .opblock-summary-description { color: #9aa0a6; }
+    .swagger-ui .opblock .opblock-summary-method {
+      border-radius: 4px;
+      font-size: 12px;
+      min-width: 70px;
+      text-align: center;
+    }
+    .swagger-ui .opblock .opblock-summary-path {
+      color: #e8eaed;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 13px;
+    }
+
+    /* ── 展开的操作详情 ── */
+    .swagger-ui .opblock-body {
+      background: #16181d;
+      border-radius: 0 0 8px 8px;
+    }
+    .swagger-ui .opblock-body pre {
+      background: #0f1117;
+      color: #e8eaed;
+      border-radius: 6px;
+    }
+    .swagger-ui .opblock-section-header {
+      background: #1a1d24;
+      border-color: #2a2d35;
+    }
+    .swagger-ui .opblock-section-header h4 { color: #e8eaed; }
+    .swagger-ui .tab li { color: #9aa0a6; }
+    .swagger-ui .tab li.active { color: #e8eaed; border-color: #8ab4f8; }
+
+    /* ── 参数表格 ── */
+    .swagger-ui table thead tr td, .swagger-ui table thead tr th {
+      color: #9aa0a6;
+      border-color: #2a2d35;
+      background: #1a1d24;
+    }
+    .swagger-ui table tbody tr td {
+      color: #e8eaed;
+      border-color: #2a2d35;
+    }
+    .swagger-ui .parameter__name { color: #e8eaed; }
+    .swagger-ui .parameter__type { color: #8ab4f8; }
+
+    /* ── 响应区 ── */
+    .swagger-ui .responses-inner h4, .swagger-ui .responses-inner h5 {
+      color: #e8eaed;
+    }
+    .swagger-ui .response-col_status { color: #e8eaed; }
+    .swagger-ui .response-col_description { color: #9aa0a6; }
+    .swagger-ui .highlight-code { background: #0f1117; }
+    .swagger-ui .microlight {
+      background: #0f1117 !important;
+      color: #e8eaed !important;
+    }
+
+    /* ── Models 区 ── */
+    .swagger-ui section.models {
+      background: #1a1d24;
+      border: 1px solid #2a2d35;
+      border-radius: 8px;
+    }
+    .swagger-ui section.models h4 { color: #e8eaed; }
+    .swagger-ui .model-container {
+      background: #16181d;
+      border-radius: 6px;
+      margin: 4px 0;
+    }
+    .swagger-ui .model-box {
+      background: #1a1d24;
+      border-radius: 6px;
+    }
+    .swagger-ui .model-title { color: #e8eaed; }
+    .swagger-ui .model { color: #e8eaed; }
+    .swagger-ui .prop-type { color: #8ab4f8; }
+    .swagger-ui .prop-format { color: #9aa0a6; }
+
+    /* ── 输入控件 ── */
+    .swagger-ui input[type=text],
+    .swagger-ui textarea,
+    .swagger-ui select {
+      background: #0f1117;
+      color: #e8eaed;
+      border: 1px solid #3d4048;
+      border-radius: 4px;
+    }
+    .swagger-ui input[type=text]:focus,
+    .swagger-ui textarea:focus {
+      border-color: #8ab4f8;
+      outline: none;
+    }
+
+    /* ── 按钮 ── */
+    .swagger-ui .btn {
+      border-radius: 4px;
+      border: 1px solid #3d4048;
+      color: #e8eaed;
+      background: #1a1d24;
+    }
+    .swagger-ui .btn:hover { background: #2a2d35; }
+    .swagger-ui .btn.execute {
+      background: #1b4d3e;
+      border-color: #2d7a5f;
+      color: #81c995;
+    }
+    .swagger-ui .btn.execute:hover { background: #215a49; }
+    .swagger-ui .btn.authorize {
+      background: #2d2a1c;
+      border-color: #5c5420;
+      color: #fdd663;
+    }
+    .swagger-ui .btn.authorize:hover { background: #3d3825; }
+    .swagger-ui .btn.cancel { color: #f28b82; border-color: #5a3d3a; }
+
+    /* ── 授权弹窗 ── */
+    .swagger-ui .auth-btn-wrapper { border-color: #2a2d35; }
+    .swagger-ui .dialog-ux .modal-ux {
+      background: #1a1d24;
+      border: 1px solid #2a2d35;
+      border-radius: 8px;
+    }
+    .swagger-ui .dialog-ux .modal-ux-header h3 { color: #e8eaed; }
+    .swagger-ui .dialog-ux .modal-ux-content { color: #e8eaed; }
+
+    /* ── 代码 / Markdown ── */
+    .swagger-ui .markdown code, .swagger-ui .renderedMarkdown code {
+      background: #2a2d35;
+      color: #fdd663;
+    }
+    .swagger-ui .markdown p, .swagger-ui .renderedMarkdown p { color: #9aa0a6; }
+    .swagger-ui .markdown li, .swagger-ui .renderedMarkdown li { color: #9aa0a6; }
+
+    /* ── 搜索栏 ── */
+    .swagger-ui .filter-container { padding: 8px 0; }
+    .swagger-ui .filter-container input {
+      background: #0f1117;
+      color: #e8eaed;
+      border: 1px solid #3d4048;
+    }
+
+    /* ── 加载动画 ── */
+    .swagger-ui .loading-container { background: #1a1d24; }
+    .swagger-ui .loading-container .loading { color: #8ab4f8; }
+
+    /* ── 整体修正：去掉之前的 invert 滤镜 ── */
+    .swagger-ui img { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = () => {
+      SwaggerUIBundle({
+        url: "/api/openapi.json",
+        dom_id: "#swagger-ui",
+        presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
+        layout: "BaseLayout",
+        deepLinking: true,
+        defaultModelsExpandDepth: -1,
+        docExpansion: "list",
+        filter: true,
+        tryItOutEnabled: true,
+        requestSnippetsEnabled: false,
+      });
+    };
+  </script>
+</body>
+</html>

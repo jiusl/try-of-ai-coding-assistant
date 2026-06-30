@@ -84,3 +84,24 @@ agentCommand
     process.exit(0)
   })
 
+// select 子命令
+agentCommand
+  .command("select <id>")
+  .description("Select an agent for the current session")
+  .action(async (id) => {
+    await AppRuntime.runPromise(
+      Effect.gen(function* () {
+        const svc = yield* AgentServiceTag
+        const registry = yield* AgentRegistry
+        // 验证 agent 存在并启用
+        const agent = yield* registry.get(id)
+        if (agent.enabled === false) {
+          printSystemMessage(`Agent "${id}" is disabled, cannot select`, "warning")
+          process.exit(0)
+        }
+        printSystemMessage(`Agent "${agent.name}" (${id}) selected`, "info")
+      })
+    )
+    process.exit(0)
+  })
+

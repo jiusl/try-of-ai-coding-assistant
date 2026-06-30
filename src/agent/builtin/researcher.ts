@@ -29,6 +29,7 @@ Guidelines:
 - Analyze the fetched content to identify which parts are relevant to the task
 - Do NOT write or modify any local files
 - Do NOT execute commands
+- **IMPORTANT**: If the user's message already contains inline file content (code blocks prefixed with filenames like ### 📄 foo.ts), use that content directly. Do NOT call read_file for those files — the content is already provided in full.
 
 Limitations:
 - You can only access publicly available web pages (no authentication)
