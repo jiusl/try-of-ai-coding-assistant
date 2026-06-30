@@ -1,5 +1,5 @@
 // src/agent/executor.ts
-import { Context, Effect, Layer, Queue, Stream, Fiber, Duration, Cause } from "effect"
+import { Context, Effect, Layer, Queue, Stream, Fiber, Duration, Cause, Option } from "effect"
 import type { Message } from "../provider/types.js"
 import type { ToolCall, ToolResult, ToolContext } from "../tool/types.js"
 import { Provider } from "../provider/provider.js"
@@ -181,8 +181,10 @@ export const AgentExecutorLive = Layer.effect(
         const buildMessages = (): Effect.Effect<Message[], Error> =>
           Effect.gen(function* () {
             const history = yield* session.getConversationHistory(sessionId)
+            // 将 workspace 信息注入 system prompt，让 LLM 知道当前工作目录
+            const wsInfo = `\n\n<workspace>\n当前工作目录: ${workspaceRoot}\n所有工具默认在此目录下执行。如果需要操作其他目录的文件，请使用绝对路径或指定 cwd 参数。\n</workspace>`
             return [
-              { role: "system", content: agent.systemPrompt },
+              { role: "system", content: agent.systemPrompt + wsInfo },
               ...history
             ]
           })

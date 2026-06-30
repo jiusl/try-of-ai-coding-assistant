@@ -165,6 +165,15 @@ export async function updateSessionWorkspace(sessionId: string, workspace: strin
   return res.data!
 }
 
+/** 打开原生文件夹浏览对话框，返回选中的绝对路径 */
+export async function browseFolder(currentDir?: string): Promise<string> {
+  const res = await request<{ success: boolean; data: { path: string } }>("/workspace/browse", {
+    method: "POST",
+    body: JSON.stringify({ currentDir: currentDir || "" }),
+  })
+  return res.data!.path
+}
+
 // ── 确认 ──
 
 export async function confirmTool(sessionId: string, approved: boolean): Promise<void> {

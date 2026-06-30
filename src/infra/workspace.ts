@@ -24,8 +24,8 @@ export function defaultWorkspace(): string {
 }
 
 /**
- * 校验工作路径是否安全（必须在项目根目录下，防止 ../ 逃逸）。
- * 返回规范化后的绝对路径，若不安全则返回默认路径。
+ * 校验并规范化工作路径。
+ * 基础校验：非空、绝对路径。不限制必须在项目子目录下（用户通过原生对话框选择）。
  */
 export function sanitizeWorkspace(raw: string): string {
   if (!raw || !isAbsolute(raw)) {
@@ -33,12 +33,6 @@ export function sanitizeWorkspace(raw: string): string {
   }
 
   const normalized = normalize(raw)
-  const projectRoot = normalize(process.cwd())
-
-  // 必须在项目根目录或其子目录下
-  if (!normalized.startsWith(projectRoot + sep) && normalized !== projectRoot) {
-    return defaultWorkspace()
-  }
 
   // 确保目录存在
   if (!existsSync(normalized)) {

@@ -515,6 +515,17 @@ export function userToolToDefinition(
       const cwd = def.toolDir
       let interpreter: string | null
 
+      // 将 workspaceRoot 注入到 input 中，作为脚本工具的默认 cwd
+      // 仅当 input 是对象且 LLM 未显式传 cwd 时注入
+      const inputObj = typeof input === "object" && input !== null && !Array.isArray(input)
+        ? { ...input as Record<string, unknown> }
+        : null
+      if (inputObj && _context?.workspaceRoot && typeof _context.workspaceRoot === "string") {
+        if (!inputObj["cwd"]) {
+          inputObj["cwd"] = _context.workspaceRoot
+        }
+      }
+
       if (isPythonEntry(exec.entry) && !exec.interpreter) {
         // Python 工具：动态解析解释器，支持 .venv 检测
         yield* ensureRequirements(cwd)
@@ -531,7 +542,7 @@ export function userToolToDefinition(
       }
 
       const cmdParts = [...interpreter.split(" "), exec.entry]
-      const inputJson = JSON.stringify(input)
+      const inputJson = JSON.stringify(inputObj ?? input)
 
       const result = yield* Effect.tryPromise({
         try: async () => {
