@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { Box, HStack, IconButton, Text, Spinner, VStack } from "@chakra-ui/react"
-import type { ChatMessage, SessionInfo, AgentInfo } from "./types"
+import type { ChatMessage, SessionInfo, AgentInfo, ProjectInfo } from "./types"
 import * as api from "./api"
 import { useAuth } from "./AuthContext"
 import { ChatPanel } from "./components/ChatPanel"
@@ -16,6 +16,8 @@ import { SettingsDrawer } from "./components/SettingsDrawer"
 import { StatusIndicator } from "./components/StatusIndicator"
 import { ErrorBoundary } from "./components/ErrorBoundary"
 import { LoginPage } from "./components/LoginPage"
+import { TerminalPanel } from "./components/Terminal"
+import { FileExplorerPanel } from "./components/FileExplorerPanel"
 import { useWebSocket } from "./hooks/useWebSocket"
 import { useToast } from "./components/Toast"
 
@@ -33,6 +35,20 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [workspace, setWorkspace] = useState("")
+
+  // 项目状态
+  const [projects, setProjects] = useState<ProjectInfo[]>([])
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null)
+
+  // 终端面板状态
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalHeight, setTerminalHeight] = useState(250)
+
+  // 文件浏览器状态
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerWidth, setViewerWidth] = useState(550)
+  const [openTabs, setOpenTabs] = useState<string[]>([])
+  const [activeTabIndex, setActiveTabIndex] = useState(0)
 
   // 配额刷新版本号 — 每次创建/删除会话后递增，驱动 TierPanel 重新加载
   const [quotaVersion, setQuotaVersion] = useState(0)
@@ -53,7 +69,18 @@ export function App() {
   // 初始加载 — 登录成功后加载数据
   useEffect(() => {
     if (!isAuthenticated) return
-    loadSessions()
+    ;(async () => {
+      const projectList = await api.fetchProjects().catch(() => [] as ProjectInfo[])
+      setProjects(projectList)
+      const pid = currentProjectId ?? projectList[0]?.id
+      if (pid) setCurrentProjectId(pid)
+      // 以确定性的 projectId 加载会话
+      const list = await api.fetchSessions(pid).catch(() => [] as SessionInfo[])
+      setSessions(list)
+      if (!currentSessionId && list.length > 0) {
+        switchToSession(list[0]!.id)
+      }
+    })()
     loadAgents()
   }, [isAuthenticated])
 
@@ -67,9 +94,22 @@ export function App() {
 
   // ──── 数据加载 ────
 
-  const loadSessions = async () => {
+  const loadProjects = async () => {
     try {
-      const list = await api.fetchSessions()
+      const list = await api.fetchProjects()
+      setProjects(list)
+      if (!currentProjectId && list.length > 0) {
+        setCurrentProjectId(list[0]!.id)
+      }
+    } catch (e) {
+      console.error("加载项目失败:", e)
+    }
+  }
+
+  const loadSessions = async (projectId?: string) => {
+    const pid = projectId ?? currentProjectId ?? undefined
+    try {
+      const list = await api.fetchSessions(pid)
       setSessions(list)
       if (!currentSessionId && list.length > 0) {
         switchToSession(list[0]!.id)
@@ -126,11 +166,14 @@ export function App() {
     } catch {
       setWorkspace("")
     }
+    // 清除文件预览
+    setOpenTabs([])
+    setActiveTabIndex(0)
   }, [currentSessionId, sessionCache])
 
   const handleCreateSession = async () => {
     try {
-      const s = await api.createSession()
+      const s = await api.createSession(undefined, currentProjectId ?? undefined)
       setSessions((prev) => [s, ...prev])
       setCurrentSessionId(s.id)
       setMessages([])
@@ -170,6 +213,25 @@ export function App() {
     }
   }
 
+  const handleProjectSelect = async (project: ProjectInfo) => {
+    if (project.id === currentProjectId) return
+    // 激活项目（更新 last_activated_at）
+    api.activateProject(project.id).catch(() => {})
+    setCurrentProjectId(project.id)
+    // 工作路径先切换到项目路径
+    setWorkspace(project.path)
+    // 清除当前会话，重新加载该项目的会话列表
+    setCurrentSessionId(null)
+    setMessages([])
+    try {
+      const list = await api.fetchSessions(project.id)
+      setSessions(list)
+      if (list.length > 0) {
+        switchToSession(list[0]!.id)
+      }
+    } catch { /* ignore */ }
+  }
+
   const handleRenameSession = async (id: string, title: string) => {
     try {
       await api.renameSession(id, title)
@@ -203,6 +265,53 @@ export function App() {
     }
   }
 
+  /** 文件树中点击文件 → 打开/切换到对应 tab */
+  const handleFileSelect = (path: string) => {
+    setOpenTabs((prev) => {
+      const idx = prev.indexOf(path)
+      if (idx >= 0) {
+        setActiveTabIndex(idx)
+        return prev
+      }
+      setActiveTabIndex(prev.length)
+      return [...prev, path]
+    })
+    setViewerOpen(true)
+  }
+
+  /** 关闭某个 tab */
+  const handleTabClose = (index: number) => {
+    setOpenTabs((prev) => {
+      const next = prev.filter((_, i) => i !== index)
+      if (next.length === 0) {
+        setViewerOpen(false)
+        setActiveTabIndex(0)
+      } else if (activeTabIndex >= next.length) {
+        setActiveTabIndex(next.length - 1)
+      } else if (index < activeTabIndex) {
+        setActiveTabIndex((a) => a - 1)
+      }
+      return next
+    })
+  }
+
+  /** 切换到指定 tab */
+  const handleTabSwitch = (index: number) => {
+    setActiveTabIndex(index)
+  }
+
+  /** 关闭整个面板 */
+  const handleViewerClose = () => {
+    setViewerOpen(false)
+    setOpenTabs([])
+    setActiveTabIndex(0)
+  }
+
+  /** 右侧面板拖拽调宽 */
+  const handleViewerResize = (deltaX: number) => {
+    setViewerWidth((w) => Math.max(350, Math.min(900, w + deltaX)))
+  }
+
   /** Tab 键在 Chat ↔ Builder 之间切换 */
   const handleCycleAgent = useCallback((_direction: 1 | -1) => {
     const nextId = currentAgentId === "builtin:builder" ? "builtin:chat" : "builtin:builder"
@@ -219,8 +328,13 @@ export function App() {
       const target = e.target as HTMLElement
       const isInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
 
-      // Escape: 关闭设置 / 关闭侧栏
+      // Escape: 关闭设置 / 关闭侧栏 / 关闭终端
       if (e.key === "Escape") {
+        if (terminalOpen) {
+          e.preventDefault()
+          setTerminalOpen(false)
+          return
+        }
         if (settingsOpen) {
           e.preventDefault()
           setSettingsOpen(false)
@@ -232,6 +346,13 @@ export function App() {
           setSidebarOpen(false)
           return
         }
+      }
+
+      // Ctrl+` — 切换终端
+      if (e.key === "`" && e.ctrlKey && !isInput) {
+        e.preventDefault()
+        setTerminalOpen((p) => !p)
+        return
       }
 
       // Ctrl+N: 新建会话
@@ -259,10 +380,12 @@ export function App() {
         setSidebarOpen((prev) => !prev)
         return
       }
+
+
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [settingsOpen, sidebarOpen, handleCreateSession])
+  }, [settingsOpen, sidebarOpen, terminalOpen, viewerOpen, handleCreateSession])
 
   // ──── 认证门控 ────
   if (isLoading) {
@@ -304,6 +427,14 @@ export function App() {
         onRename={handleRenameSession}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen((p) => !p)}
+        projects={projects}
+        currentProjectId={currentProjectId}
+        onProjectSelect={handleProjectSelect}
+        onProjectsRefresh={() => {
+          api.fetchProjects().then(setProjects).catch(() => {})
+        }}
+        sessionId={currentSessionId}
+        onFileSelect={handleFileSelect}
       />
 
       {/* 主区域 */}
@@ -360,6 +491,20 @@ export function App() {
             >
               退出
             </Box>
+            {/* 终端切换按钮 */}
+            <Box
+              as="button"
+              fontSize="sm"
+              px={2} py={1}
+              borderRadius="md"
+              color={terminalOpen ? "green.400" : "gray.500"}
+              bg={terminalOpen ? "gray.800" : undefined}
+              _hover={{ bg: "gray.800", color: "green.300" }}
+              onClick={() => setTerminalOpen((p) => !p)}
+              title={terminalOpen ? "关闭终端 (Ctrl+`)" : "打开终端 (Ctrl+`)"}
+            >
+              &gt;_
+            </Box>
             <Box
               as="button"
               fontSize="lg"
@@ -367,7 +512,7 @@ export function App() {
               py={1}
               borderRadius="md"
               _hover={{ bg: "gray.800" }}
-              onClick={() => setSettingsOpen(true)}
+              onClick={() => { setSettingsOpen(true); setQuotaVersion((v) => v + 1) }}
               aria-label="设置"
             >
               ⚙️
@@ -390,7 +535,31 @@ export function App() {
           onChatComplete={() => { setQuotaVersion((v) => v + 1); loadSessions() }}
           onCycleAgent={handleCycleAgent}
         />
+
+        {/* 终端面板（底部可折叠） */}
+        {terminalOpen && (
+          <TerminalPanel
+            sessionId={currentSessionId}
+            workspace={workspace}
+            height={terminalHeight}
+            onResize={(deltaY) => setTerminalHeight((h) => Math.max(100, Math.min(600, h + deltaY)))}
+            onClose={() => setTerminalOpen(false)}
+          />
+        )}
       </Box>
+
+      {/* 文件预览面板（右侧可拖拽调宽，多 tab） */}
+      <FileExplorerPanel
+        sessionId={currentSessionId}
+        openTabs={openTabs}
+        activeTabIndex={activeTabIndex}
+        isOpen={viewerOpen}
+        onToggle={handleViewerClose}
+        onTabSwitch={handleTabSwitch}
+        onTabClose={handleTabClose}
+        width={viewerWidth}
+        onResize={handleViewerResize}
+      />
 
       {/* 设置抽屉 */}
       <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} quotaVersion={quotaVersion} onLicenseActivated={() => setQuotaVersion(v => v + 1)} />

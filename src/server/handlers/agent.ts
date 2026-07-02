@@ -7,7 +7,7 @@ import { Effect } from "effect"
 import type { Router } from "../router.js"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { AgentServiceTag } from "../../agent/index.js"
-import { successResponse, errorToStructuredResponse, requireAuth } from "../middleware.js"
+import { successResponse, errorToStructuredResponse, requireAuth } from "../middleware/index.js"
 import type { AgentConfig } from "../../agent/types.js"
 
 // -------------------------------------------------

@@ -8,7 +8,7 @@ import { metrics } from "../../infra/metrics.js"
 import { auditLog } from "../../infra/audit-log.js"
 import { licenseService } from "../../infra/license.js"
 import { seedService } from "../../infra/seed.js"
-import { jsonResponse, errorResponse, parseJsonBody } from "../middleware.js"
+import { jsonResponse, errorResponse, parseJsonBody } from "../middleware/index.js"
 
 // -------------------------------------------------
 // 注册指标和审计路由

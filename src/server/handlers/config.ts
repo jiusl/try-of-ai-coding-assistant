@@ -16,7 +16,7 @@ import {
   parseJsonBody,
   requireAuth,
   errorToStructuredResponse,
-} from "../middleware.js"
+} from "../middleware/index.js"
 
 // -------------------------------------------------
 // 脱敏：sk-xxxxxxxx...xxxx

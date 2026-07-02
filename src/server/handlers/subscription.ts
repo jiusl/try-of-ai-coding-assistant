@@ -6,7 +6,7 @@
 import type { Router } from "../router.js"
 import { rbac } from "../../infra/rbac.js"
 import { subscription } from "../../infra/subscription.js"
-import { jsonResponse, errorResponse, parseJsonBody } from "../middleware.js"
+import { jsonResponse, errorResponse, parseJsonBody } from "../middleware/index.js"
 
 // -------------------------------------------------
 // 辅助：从请求中提取用户

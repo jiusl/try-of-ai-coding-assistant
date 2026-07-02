@@ -3,7 +3,7 @@
 // API 客户端层 — 所有后端通信
 // ====================================================
 
-import type { SessionInfo, ChatMessage, AgentInfo, AppConfig, QuotaInfo, TierInfo, SwitchTierResult, AuthUser, AuthTokens, LicenseInfo, ToolInfo, ToolReloadResult, AddToolResult, SkillInfo, SkillReloadResult, AddSkillResult } from "./types"
+import type { SessionInfo, ChatMessage, AgentInfo, AppConfig, QuotaInfo, TierInfo, SwitchTierResult, AuthUser, AuthTokens, LicenseInfo, ToolInfo, ToolReloadResult, AddToolResult, SkillInfo, SkillReloadResult, AddSkillResult, ProjectInfo, FileEntry, FileContent } from "./types"
 
 const BASE = "/api"
 
@@ -59,15 +59,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 // ── 会话 ──
 
-export async function fetchSessions(): Promise<SessionInfo[]> {
-  const res = await request<{ success: boolean; data: SessionInfo[] }>("/sessions?limit=200")
+export async function fetchSessions(projectId?: string): Promise<SessionInfo[]> {
+  const query = projectId ? `?limit=200&project_id=${encodeURIComponent(projectId)}` : "?limit=200"
+  const res = await request<{ success: boolean; data: SessionInfo[] }>(`/sessions${query}`)
   return res.data ?? []
 }
 
-export async function createSession(title?: string): Promise<SessionInfo> {
+export async function createSession(title?: string, projectId?: string): Promise<SessionInfo> {
+  const body: Record<string, string> = { title: title || "新会话" }
+  if (projectId) body.project_id = projectId
   const res = await request<{ success: boolean; data: SessionInfo }>("/sessions", {
     method: "POST",
-    body: JSON.stringify({ title: title || "新会话" }),
+    body: JSON.stringify(body),
   })
   return res.data!
 }
@@ -273,4 +276,58 @@ export async function addUserSkill(sourcePath: string): Promise<AddSkillResult> 
 export async function deleteUserSkill(name: string): Promise<SkillReloadResult> {
   const res = await request<{ success: boolean; data: { name: string; total: number } }>(`/skills/user/${encodeURIComponent(name)}`, { method: "DELETE" })
   return { total: res.data!.total }
+}
+
+// ── 项目管理 ──
+
+export async function fetchProjects(): Promise<ProjectInfo[]> {
+  const res = await request<{ success: boolean; data: ProjectInfo[] }>("/projects")
+  return res.data ?? []
+}
+
+export async function createProject(path: string): Promise<ProjectInfo> {
+  const res = await request<{ success: boolean; data: ProjectInfo }>("/projects", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  })
+  return res.data!
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  await request(`/projects/${id}`, { method: "DELETE" })
+}
+
+export async function activateProject(id: string): Promise<void> {
+  await request(`/projects/${id}/activate`, { method: "POST" })
+}
+
+export async function updateProject(id: string, data: { name?: string; path?: string }): Promise<void> {
+  await request(`/projects/${id}`, { method: "PUT", body: JSON.stringify(data) })
+}
+
+// ── 文件浏览 ──
+
+export interface DirListResult {
+  entries: FileEntry[]
+  workspace: string
+  relPath: string
+}
+
+export interface FileContentResult {
+  content: string
+  language: string
+  size: number
+  path: string
+}
+
+export async function fetchDirList(sessionId: string, path: string): Promise<DirListResult> {
+  const params = new URLSearchParams({ sessionId, path })
+  const res = await request<{ success: boolean; data: DirListResult }>(`/files/list?${params}`)
+  return res.data!
+}
+
+export async function fetchFileContent(sessionId: string, path: string): Promise<FileContentResult> {
+  const params = new URLSearchParams({ sessionId, path })
+  const res = await request<{ success: boolean; data: FileContentResult }>(`/files/content?${params}`)
+  return res.data!
 }

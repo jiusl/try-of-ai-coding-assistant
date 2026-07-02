@@ -1,12 +1,13 @@
 // src/agent/executor.ts
 import { Context, Effect, Layer, Queue, Stream, Fiber, Duration, Cause, Option } from "effect"
-import type { Message } from "../provider/types.js"
+import type { Message, StreamChunk, GenerateOptions, GenerateResponse, TokenUsage } from "../provider/types.js"
 import type { ToolCall, ToolResult, ToolContext } from "../tool/types.js"
 import { Provider } from "../provider/provider.js"
 import { Session } from "../session/session.js"
 import { ToolRegistry } from "../tool/registry.js"
 import { ConfirmationStore } from "../tool/confirmation.js"
 import { AgentRegistry } from "./registry.js"
+import { SkillRegistry } from "../skill/registry.js"
 import { AutoMemory } from "../memory/auto-memory.js"
 import { DelegateJSONSchema, DELEGATE_TOOL_NAME, parseDelegateArgs } from "../tool/builtin/delegate.js"
 import type { AgentConfig, AgentExecutionOptions, AgentExecutionResult, ExecutionState, ExecutionPhase } from "./types.js"
@@ -96,6 +97,7 @@ export const AgentExecutorLive = Layer.effect(
     const session = yield* Session
     const toolRegistry = yield* ToolRegistry
     const agentRegistry = yield* AgentRegistry
+    const skillRegistry = yield* SkillRegistry
     const autoMemory = yield* AutoMemory
 
     const DEFAULT_MAX_ITERATIONS = 50
@@ -107,7 +109,7 @@ export const AgentExecutorLive = Layer.effect(
       options: AgentExecutionOptions,
       stateQueue?: Queue.Queue<ExecutionState>,
       delegationChain?: DelegationChain
-    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError, ConfirmationStore> => {
+    ): Effect.Effect<AgentExecutionResult, AgentExecutionError | MaxIterationsExceededError | NoToolsAvailableError | AgentTimeoutError, ConfirmationStore> => {
       const {
         sessionId,
         userInput,
@@ -144,7 +146,11 @@ export const AgentExecutorLive = Layer.effect(
           })
         
         yield* setPhase("initializing")
-        yield* session.addUserMessage(sessionId, userInput)
+        // 根调用：持久化用户消息到数据库（前端可见）；子Agent委托：不持久化，避免内部任务描述泄露到聊天界面
+        const isRootCall = !delegationChain
+        if (isRootCall) {
+          yield* session.addUserMessage(sessionId, options.displayMessage || userInput)
+        }
         
         // 动态合并用户/远程工具：Agent 静态 toolNames 只列内置工具，
         // 用户通过 tools/user/ 目录添加的工具按 Agent 能力自动注入
@@ -181,15 +187,28 @@ export const AgentExecutorLive = Layer.effect(
         const buildMessages = (): Effect.Effect<Message[], Error> =>
           Effect.gen(function* () {
             const history = yield* session.getConversationHistory(sessionId)
+            // 注入可用 Skill 摘要，让 LLM 首轮即知晓所有 Skill，无需额外往返调用 list_skills
+            const skills = yield* skillRegistry.list()
+            let skillInfo = ""
+            if (skills.length > 0) {
+              const skillLines = skills
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((s) => `- ${s.name}: ${s.description} (tags: ${s.tags.join(", ")})`)
+              skillInfo = `\n\n<available_skills>\n${skillLines.join("\n")}\n使用 get_skill(\"name\") 获取完整 Skill 文档。调用 list_skills 可查看实时更新的 Skill 列表。\n</available_skills>`
+            }
             // 将 workspace 信息注入 system prompt，让 LLM 知道当前工作目录
             const wsInfo = `\n\n<workspace>\n当前工作目录: ${workspaceRoot}\n所有工具默认在此目录下执行。如果需要操作其他目录的文件，请使用绝对路径或指定 cwd 参数。\n</workspace>`
             return [
-              { role: "system", content: agent.systemPrompt + wsInfo },
+              { role: "system", content: agent.systemPrompt + skillInfo + wsInfo },
               ...history
             ]
           })
         
         let currentMessages = yield* buildMessages()
+        // 子Agent委托：将任务指令注入 LLM 上下文（不写数据库，前端不可见）
+        if (!isRootCall) {
+          currentMessages = [...currentMessages, { role: "user", content: userInput }]
+        }
         const initialMessageCount = currentMessages.length  // 追踪初始消息数，用于超限时持久化增量
         let iterations = 0
         let executionWarning: string | undefined = undefined  // 捕获 provider 路由警告
@@ -202,41 +221,102 @@ export const AgentExecutorLive = Layer.effect(
           iterations++
           yield* setPhase("thinking", { iteration: iterations })
           
-          const response = yield* (provider.generate(currentMessages, {
+          // ===== 流式优先 + generate 保底 =====
+          const buildLLMOptions = (): GenerateOptions => ({
             ...(options.provider !== undefined ? { provider: options.provider as any } : {}),
             ...(options.model !== undefined ? { model: options.model } : {}),
             ...(agent.model !== undefined ? { model: agent.model } : {}),
             ...(agent.temperature !== undefined ? { temperature: agent.temperature } : {}),
             ...(agent.maxTokens !== undefined ? { maxTokens: agent.maxTokens } : {}),
             ...(allToolDefs.length > 0 ? { tools: allToolDefs as any } : {}),
-          }) as Effect.Effect<any, Error>).pipe(
-            Effect.timeout(Duration.seconds(90)),
-            Effect.catchTag("TimeoutException", () =>
-              Effect.fail(new AgentTimeoutError({
-                agentId: agent.id,
-                operation: "LLM API 调用",
-                timeoutSeconds: 90,
-              }))
-            )
+          })
+
+          const llmResponse = yield* (provider.stream(currentMessages, buildLLMOptions()) as Stream.Stream<StreamChunk, Error>).pipe(
+            // 副作用：逐 token 推送前端
+            Stream.tap((chunk: StreamChunk) => Effect.sync(() => {
+              if (chunk.type === "content") onChunk?.(chunk.content ?? "")
+            })),
+            Stream.timeout(Duration.seconds(90)),
+            // 聚合成完整结果
+            Stream.runFold(
+              {
+                content: "",
+                toolCalls: [] as ToolCall[],
+                warning: undefined as string | undefined,
+                usage: undefined as TokenUsage | undefined,
+                streamError: undefined as string | undefined,
+              },
+              (acc, chunk: StreamChunk) => {
+                switch (chunk.type) {
+                  case "content":
+                    acc.content += (chunk.content ?? "")
+                    return acc
+                  case "tool_call":
+                    if (chunk.tool_call) acc.toolCalls.push(chunk.tool_call)
+                    return acc
+                  case "warning":
+                    acc.warning = chunk.content
+                    return acc
+                  case "done":
+                    acc.usage = chunk.usage
+                    return acc
+                  case "error":
+                    acc.streamError = chunk.error?.message ?? "Stream error"
+                    return acc
+                  default:
+                    return acc
+                }
+              }
+            ),
+            // 健康检查：内容为空且无 tool_calls 且无 stream error → 视为 stream 失败
+            Effect.flatMap((result) =>
+              (!result.content && result.toolCalls.length === 0 && !result.streamError)
+                ? Effect.fail(new Error("LLM stream 返回空内容"))
+                : Effect.succeed(result)
+            ),
+            // 降级：任何失败都回退到 generate() 保底
+            Effect.catchAll((err) => {
+              const streamErrMsg = err instanceof Error ? err.message : String(err)
+              console.warn(`[Executor] 流式调用失败，降级为 generate() 保底: ${streamErrMsg}`)
+              return (provider.generate(currentMessages, buildLLMOptions()) as Effect.Effect<GenerateResponse, Error>).pipe(
+                Effect.timeout(Duration.seconds(60)),
+                Effect.catchTag("TimeoutException", () =>
+                  Effect.fail(new AgentTimeoutError({
+                    agentId: agent.id,
+                    operation: "LLM API 调用（降级）",
+                    timeoutSeconds: 60,
+                  }))
+                ),
+                Effect.map((resp) => {
+                  // 保底模式：一次性推送全文
+                  if (onChunk && resp.content) {
+                    onChunk(resp.content)
+                  }
+                  return {
+                    content: resp.content,
+                    toolCalls: (resp.tool_calls as ToolCall[] | undefined) ?? [],
+                    warning: resp.warning,
+                    usage: resp.usage,
+                    streamError: undefined,
+                  }
+                })
+              )
+            })
           )
 
           // 捕获首轮 provider 路由警告
-          if (response.warning && !executionWarning) {
-            executionWarning = response.warning
-            yield* setPhase("thinking", { iteration: iterations, warning: response.warning })
+          if (llmResponse.warning && !executionWarning) {
+            executionWarning = llmResponse.warning
+            yield* setPhase("thinking", { iteration: iterations, warning: llmResponse.warning })
           }
           
-          if (response.usage) {
-            totalTokens.promptTokens += response.usage.promptTokens
-            totalTokens.completionTokens += response.usage.completionTokens
-            totalTokens.totalTokens += response.usage.totalTokens
+          if (llmResponse.usage) {
+            totalTokens.promptTokens += llmResponse.usage.promptTokens
+            totalTokens.completionTokens += llmResponse.usage.completionTokens
+            totalTokens.totalTokens += llmResponse.usage.totalTokens
           }
           
-          if (onChunk && response.content) {
-            onChunk(response.content)
-          }
-          
-          const toolCalls = response.tool_calls as ToolCall[] | undefined
+          const toolCalls = llmResponse.toolCalls.length > 0 ? llmResponse.toolCalls : undefined
           
           if (toolCalls && toolCalls.length > 0) {
             const firstCall = toolCalls[0]!
@@ -502,7 +582,7 @@ export const AgentExecutorLive = Layer.effect(
             // 将工具调用+结果追加到消息列表
             currentMessages.push({
               role: "assistant",
-              content: response.content,
+              content: llmResponse.content,
               tool_calls: toolCalls,
             } as Message)
             for (const result of orderedResults) {
@@ -514,7 +594,7 @@ export const AgentExecutorLive = Layer.effect(
             }
             
           } else {
-            finalContent = response.content ?? ""
+            finalContent = llmResponse.content ?? ""
             yield* session.addAssistantMessage(sessionId, finalContent)
             break
           }

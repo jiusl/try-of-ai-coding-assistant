@@ -5,6 +5,7 @@ import type {
   GenerateOptions, 
   GenerateResponse, 
   StreamChunk,
+  TokenUsage,
   ProviderType,
   ProviderError,
   SDKNotInstalledError,
@@ -303,21 +304,57 @@ async function* generateOpenAIStreamChunks(
   streamResponse: unknown
 ): AsyncGenerator<StreamChunk> {
   const iterable = streamResponse as AsyncIterable<any>
+  // 聚合分片 tool_call delta（index → 累加器）
+  const toolCallAcc = new Map<number, { id: string; name: string; args: string }>()
+  let lastUsage: TokenUsage | undefined
+
   for await (const chunk of iterable) {
-    const content: string = chunk.choices?.[0]?.delta?.content || ""
-    const toolCalls = chunk.choices?.[0]?.delta?.tool_calls
+    const delta = chunk.choices?.[0]?.delta
+    const content: string = delta?.content || ""
 
     if (content) {
       yield { type: "content", content } as StreamChunk
     }
 
-    if (toolCalls && toolCalls.length > 0) {
-      for (const tc of toolCalls) {
-        yield { type: "tool_call", tool_call: tc as ToolCall } as StreamChunk
+    // 聚合分片 tool_call delta（name + arguments 是分片到达的）
+    if (delta?.tool_calls) {
+      for (const tc of delta.tool_calls) {
+        const idx = tc.index ?? 0
+        if (!toolCallAcc.has(idx)) {
+          toolCallAcc.set(idx, { id: tc.id ?? "", name: "", args: "" })
+        }
+        const acc = toolCallAcc.get(idx)!
+        if (tc.id) acc.id = tc.id
+        if (tc.function?.name) acc.name += tc.function.name
+        if (tc.function?.arguments) acc.args += tc.function.arguments
+      }
+    }
+
+    // 捕获最后一帧的 usage（OpenAI/DeepSeek 流式最后 chunk 带 usage）
+    if (chunk.usage) {
+      lastUsage = {
+        promptTokens: chunk.usage.prompt_tokens ?? 0,
+        completionTokens: chunk.usage.completion_tokens ?? 0,
+        totalTokens: chunk.usage.total_tokens ?? 0,
       }
     }
   }
-  yield { type: "done" } as StreamChunk
+
+  // 流结束后 yield 聚合完成的 tool_calls
+  for (const [, acc] of toolCallAcc) {
+    if (acc.name) {
+      yield {
+        type: "tool_call",
+        tool_call: {
+          id: acc.id || crypto.randomUUID(),
+          type: "function",
+          function: { name: acc.name, arguments: acc.args },
+        },
+      } as StreamChunk
+    }
+  }
+
+  yield { type: "done", usage: lastUsage } as StreamChunk
 }
 
 /** 增强 ProviderError，附加上下文信息 */
@@ -716,12 +753,62 @@ export const ProviderLive = Layer.effect(
 
           async function* gen(): AsyncGenerator<StreamChunk> {
             const iterable = streamResponse as unknown as AsyncIterable<any>
+            // Anthropic tool_use 聚合（index → 累加器）
+            const toolAcc = new Map<number, { id: string; name: string; args: string }>()
+            let anthroUsage: TokenUsage | undefined
+
             for await (const chunk of iterable) {
+              // 文本增量
               if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta") {
                 yield { type: "content", content: chunk.delta.text } as StreamChunk
               }
+
+              // tool_use 开始 — 记录 name + id
+              if (chunk.type === "content_block_start" && chunk.content_block?.type === "tool_use") {
+                const tu = chunk.content_block
+                toolAcc.set(tu.index ?? 0, { id: tu.id ?? "", name: tu.name ?? "", args: "" })
+              }
+
+              // tool_use JSON 增量 — 拼接 arguments
+              if (chunk.type === "content_block_delta" && chunk.delta?.type === "input_json_delta") {
+                const idx = chunk.index ?? 0
+                const partial = chunk.delta.partial_json ?? ""
+                if (!toolAcc.has(idx)) toolAcc.set(idx, { id: "", name: "", args: "" })
+                toolAcc.get(idx)!.args += partial
+              }
+
+              // 捕获 message 级 usage（Anthropic 在 message_start/delta/message_stop 中带 usage）
+              if (chunk.type === "message_start" && chunk.message?.usage) {
+                anthroUsage = {
+                  promptTokens: chunk.message.usage.input_tokens ?? 0,
+                  completionTokens: chunk.message.usage.output_tokens ?? 0,
+                  totalTokens: (chunk.message.usage.input_tokens ?? 0) + (chunk.message.usage.output_tokens ?? 0),
+                }
+              }
+              if (chunk.type === "message_delta" && chunk.usage) {
+                anthroUsage = {
+                  promptTokens: anthroUsage?.promptTokens ?? 0,
+                  completionTokens: (anthroUsage?.completionTokens ?? 0) + (chunk.usage.output_tokens ?? 0),
+                  totalTokens: (anthroUsage?.totalTokens ?? 0) + (chunk.usage.output_tokens ?? 0),
+                }
+              }
             }
-            yield { type: "done" } as StreamChunk
+
+            // yield 聚合好的 tool_calls
+            for (const [, acc] of toolAcc) {
+              if (acc.name) {
+                yield {
+                  type: "tool_call",
+                  tool_call: {
+                    id: acc.id || crypto.randomUUID(),
+                    type: "function",
+                    function: { name: acc.name, arguments: acc.args },
+                  },
+                } as StreamChunk
+              }
+            }
+
+            yield { type: "done", usage: anthroUsage } as StreamChunk
           }
 
           return Stream.fromAsyncIterable(gen(), (error: any) =>

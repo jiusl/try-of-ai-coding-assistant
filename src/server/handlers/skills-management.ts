@@ -4,7 +4,7 @@
 // ====================================================
 
 import type { Router } from "../router.js"
-import { jsonResponse, errorResponse, parseJsonBody, requireAuth } from "../middleware.js"
+import { jsonResponse, errorResponse, parseJsonBody, requireAuth } from "../middleware/index.js"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { SkillRegistry, SkillSystem } from "../../skill/index.js"
 import { logger } from "../../infra/logger.js"
@@ -108,14 +108,15 @@ async function getSkillInfo(skillDir: string, source: SkillInfo["source"]): Prom
     const fmName = frontmatter["name"]
     const category = frontmatter["category"] ? String(frontmatter["category"]) : undefined
     const description = frontmatter["description"] ? String(frontmatter["description"]) : undefined
-    return {
+    const info: SkillInfo = {
       name: fmName ? String(fmName) : name,
       source,
-      category,
-      description,
       loaded: true,
       skillDir,
     }
+    if (category !== undefined) info.category = category
+    if (description !== undefined) info.description = description
+    return info
   } catch (err) {
     return { name, source, loaded: false, error: String(err), skillDir }
   }

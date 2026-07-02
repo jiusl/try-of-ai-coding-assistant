@@ -4,8 +4,7 @@
 // ====================================================
 
 import { Router, type CompiledRoute } from "./router.js"
-import { withCorsWrapper, handleCORS, serveStatic, errorResponse, jsonResponse, applySecurityHeaders, requireAuth, errorToStructuredResponse } from "./middleware.js"
-import { getRateLimiter, RateLimiter } from "./middleware/rate-limiter.js"
+import { withCorsWrapper, handleCORS, serveStatic, errorResponse, jsonResponse, applySecurityHeaders, requireAuth, errorToStructuredResponse, getRateLimiter, RateLimiter } from "./middleware/index.js"
 import { registerChatRoutes } from "./handlers/chat.js"
 import { registerSessionRoutes } from "./handlers/session.js"
 import { registerAgentRoutes } from "./handlers/agent.js"
@@ -17,8 +16,11 @@ import { registerSubscriptionRoutes } from "./handlers/subscription.js"
 import { registerToolsManagementRoutes } from "./handlers/tools-management.js"
 import { registerSkillsManagementRoutes } from "./handlers/skills-management.js"
 import { registerWorkspaceRoutes } from "./handlers/workspace.js"
+import { registerProjectRoutes } from "./handlers/project.js"
+import { registerFileRoutes } from "./handlers/files.js"
 import { generateOpenAPIDoc } from "./openapi.js"
 import { WebSocketManager } from "./websocket.js"
+import { TerminalManager } from "./terminal-mgr.js"
 import { logger, newTraceId, setTraceId } from "../infra/logger.js"
 import { runMigrations, type MigrationResult } from "../infra/migration.js"
 import { allMigrations } from "../infra/migrations/index.js"
@@ -127,6 +129,8 @@ function buildRouter(): Router {
   registerToolsManagementRoutes(router)
   registerSkillsManagementRoutes(router)
   registerWorkspaceRoutes(router)
+  registerProjectRoutes(router)
+  registerFileRoutes(router)
 
   // 存活探针 — 仅确认进程在运行
   router.get("/api/health", (_ctx) => {
@@ -312,6 +316,7 @@ export function startServer(options: ServerOptions = {}) {
 
   // WebSocket 管理器 (单例)
   const wsManager = new WebSocketManager()
+  const terminalMgr = new TerminalManager()
   ;(globalThis as any).__wsManager = wsManager // 暴露给 handler 使用
 
   const router = buildRouter()
@@ -333,7 +338,7 @@ export function startServer(options: ServerOptions = {}) {
     hostname: host,
     idleTimeout: 120, // SSE 流可能需要较长时间，默认 10s 不够
     maxRequestBodySize: MAX_BODY_SIZE,
-    websocket: WebSocketManager.createConfig(wsManager),
+    websocket: WebSocketManager.createConfig(wsManager, terminalMgr),
     async fetch(request) {
       const traceId = newTraceId()
       setTraceId(traceId)
@@ -344,6 +349,16 @@ export function startServer(options: ServerOptions = {}) {
       // WebSocket 升级请求 — 显式升级，不走 HTTP 路由
       if (pathname === "/api/ws" && request.headers.get("upgrade")?.toLowerCase() === "websocket") {
         if (server!.upgrade(request, { data: undefined })) return // upgraded successfully
+        return new Response("WebSocket upgrade failed", { status: 426 })
+      }
+
+      // 终端 WebSocket 升级
+      if (pathname === "/api/terminal" && request.headers.get("upgrade")?.toLowerCase() === "websocket") {
+        const sessionId = url.searchParams.get("sessionId")
+        if (!sessionId) return new Response("Missing sessionId", { status: 400 })
+        if (server!.upgrade(request, {
+          data: { clientId: "", type: "terminal" as const, terminalSessionId: sessionId },
+        })) return
         return new Response("WebSocket upgrade failed", { status: 426 })
       }
 

@@ -6,6 +6,11 @@ import { ConfigLive } from "../config/config.js"
 import { AuthLive } from "../provider/auth.js"
 import { ProviderLive } from "../provider/provider.js"
 import { SessionLive } from "../session/session.js"
+import { ProjectLive } from "../project/project.js"
+
+/** Session + Project 合并层（避免超出 provideMerge 20 层限制） */
+const DataLive = Layer.mergeAll(SessionLive, ProjectLive)
+
 import { MemoryLive } from "../memory/memory.js"
 import { EmbeddingServiceLive } from "../memory/embedding.js"
 import { AutoMemoryLive } from "../memory/auto-memory.js"
@@ -43,7 +48,7 @@ export const AppLayer = Layer.empty.pipe(
   Layer.provideMerge(AuthLive),
   Layer.provideMerge(ConfigLive),
   Layer.provideMerge(RuleEngineLive),
-  Layer.provideMerge(SessionLive),
+  Layer.provideMerge(DataLive),
   Layer.provideMerge(MemoryLive),
   Layer.provideMerge(EmbeddingServiceLive),
   Layer.provideMerge(DatabaseDefaultLive),

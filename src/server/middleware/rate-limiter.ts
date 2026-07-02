@@ -4,7 +4,7 @@
 // ====================================================
 
 import { Database as BunDatabase } from "bun:sqlite"
-import { jsonResponse } from "../middleware.js"
+import { jsonResponse } from "./json.js"
 
 // -------------------------------------------------
 // 类型定义

@@ -7,8 +7,10 @@ import { useState } from "react"
 import {
   Box, Button, HStack, IconButton, Input, Text, VStack, Heading,
 } from "@chakra-ui/react"
-import type { SessionInfo } from "../types"
+import type { SessionInfo, ProjectInfo } from "../types"
 import { formatTime } from "../utils"
+import { ProjectList } from "./ProjectList"
+import { FileTree } from "./FileTree"
 
 interface SessionSidebarProps {
   sessions: SessionInfo[]
@@ -21,6 +23,14 @@ interface SessionSidebarProps {
   isOpen?: boolean
   /** 切换展开/收起 */
   onToggle?: () => void
+  /** 项目相关 */
+  projects: ProjectInfo[]
+  currentProjectId: string | null
+  onProjectSelect: (project: ProjectInfo) => void
+  onProjectsRefresh: () => void
+  /** 文件浏览相关 */
+  sessionId: string | null
+  onFileSelect: (path: string) => void
 }
 
 export function SessionSidebar({
@@ -32,10 +42,17 @@ export function SessionSidebar({
   onRename,
   isOpen = true,
   onToggle,
+  projects,
+  currentProjectId,
+  onProjectSelect,
+  onProjectsRefresh,
+  sessionId,
+  onFileSelect,
 }: SessionSidebarProps) {
   const [search, setSearch] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState("")
+  const [fileRefreshCounter, setFileRefreshCounter] = useState(0)
 
   const filtered = search
     ? sessions.filter((s) => (s.title || "").toLowerCase().includes(search.toLowerCase()))
@@ -58,43 +75,79 @@ export function SessionSidebar({
       {/* Header */}
       <HStack px={4} py={4} justify="space-between">
         <Heading size="md" fontFamily="mono">🤖 Try</Heading>
-        <HStack gap={1}>
-          <IconButton
-            aria-label="新建会话"
-            size="xs"
-            variant="ghost"
-            onClick={onCreate}
-          >
-            ＋
-          </IconButton>
-          {/* 移动端关闭按钮 */}
-          <IconButton
-            aria-label="关闭侧栏"
-            display={{ base: "inline-flex", md: "none" }}
-            size="xs"
-            variant="ghost"
-            onClick={onToggle}
-          >
-            ✕
-          </IconButton>
-        </HStack>
+        {/* 移动端关闭按钮 */}
+        <IconButton
+          aria-label="关闭侧栏"
+          display={{ base: "inline-flex", md: "none" }}
+          size="xs"
+          variant="ghost"
+          onClick={onToggle}
+        >
+          ✕
+        </IconButton>
       </HStack>
 
-      {/* 搜索 */}
-      <Box px={3} pb={2}>
-        <Input
-          placeholder="搜索会话…"
-          size="xs"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          bg="gray.800"
-          border="none"
-          _placeholder={{ color: "gray.500" }}
+      {/* 项目选择器 */}
+      <Box px={3} pb={1}>
+        <ProjectList
+          projects={projects}
+          currentProjectId={currentProjectId}
+          onSelect={onProjectSelect}
+          onRefresh={onProjectsRefresh}
         />
       </Box>
 
+      {/* 文件目录树 */}
+      <Box flex={2} overflow="auto" minH={0} borderTop="1px solid" borderColor="gray.800">
+        <HStack justify="space-between" px={3} pt={2} pb={1}>
+          <Text fontSize="11px" color="gray.600">
+            📁 文件浏览
+          </Text>
+          <IconButton
+            aria-label="刷新文件列表"
+            size="2xs"
+            variant="ghost"
+            color="gray.500"
+            _hover={{ color: "blue.300" }}
+            onClick={() => setFileRefreshCounter((c) => c + 1)}
+          >
+            🔄
+          </IconButton>
+        </HStack>
+        <FileTree
+          key={sessionId ?? "__no_session__"}
+          sessionId={sessionId}
+          onFileSelect={onFileSelect}
+          refreshCounter={fileRefreshCounter}
+        />
+      </Box>
+
+      {/* 搜索 + 新建 */}
+      <Box px={3} pt={2} pb={1} borderTop="1px solid" borderColor="gray.800">
+        <HStack gap={2}>
+          <Input
+            placeholder="搜索会话…"
+            size="xs"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            bg="gray.800"
+            border="none"
+            _placeholder={{ color: "gray.500" }}
+          />
+          <Button
+            size="xs"
+            colorScheme="blue"
+            variant="solid"
+            onClick={onCreate}
+            flexShrink={0}
+          >
+            ＋ 新建
+          </Button>
+        </HStack>
+      </Box>
+
       {/* 列表 */}
-      <Box flex={1} overflowY="auto" px={2}>
+      <Box flex={3} overflowY="auto" px={2} minH={0}>
         {sessions.length === 0 && (
           <Text fontSize="sm" color="gray.600" textAlign="center" mt={8}>
             暂无会话

@@ -81,6 +81,8 @@ export interface ExecutionState {
 export interface AgentExecutionOptions {
   sessionId: string
   userInput: string
+  /** 用于持久化到数据库的显示消息（与 userInput 不同时使用，如文件引用场景） */
+  displayMessage?: string
   /** 指定要使用的 Agent ID（覆盖会话绑定） */
   agentId?: string
   maxIterations?: number

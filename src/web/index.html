@@ -56,6 +56,42 @@
       }
       .api-docs-link:hover { background: #333; color: #fff; }
 
+      /* ──── 工具调用堆叠：连续 tool 消息紧凑排列 + 左侧连接线 ──── */
+      /* 第一个 tool 消息：左边留出线位 */
+      [data-role="tool"] {
+        margin-bottom: 0 !important;
+        padding-left: 28px;
+        position: relative;
+      }
+      /* 相邻 tool 消息之间无间距，保持紧凑 */
+      [data-role="tool"] + [data-role="tool"] {
+        margin-top: 0 !important;
+        padding-top: 2px;
+      }
+      /* 非 tool 消息紧跟在 tool 后面时，增加间距分隔 */
+      *:not([data-role="tool"]) + [data-role="tool"] {
+        margin-top: 8px;
+      }
+      /* 左侧竖线：每个 tool 消息自身绘制 */
+      [data-role="tool"]::before {
+        content: "";
+        position: absolute;
+        left: 10px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #444;
+        border-radius: 1px;
+      }
+      /* 连续 tool 消息中，最后一个的竖线缩短（只到内容底部） */
+      [data-role="tool"]:not(:has(+ [data-role="tool"]))::before {
+        bottom: 50%;
+      }
+      /* 连续 tool 消息中，第一个的竖线从中间开始（不延伸到上方间距） */
+      [data-role="tool"]:not([data-role="tool"] + [data-role="tool"]) {
+        /* 单独一个 tool，竖线只覆盖内容区 */
+      }
+
       /* ──── 选中文本 ──── */
       ::selection { background: rgba(59, 130, 246, 0.3); color: #fff; }
 

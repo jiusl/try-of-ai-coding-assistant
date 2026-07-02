@@ -7,7 +7,7 @@ import type { Router } from "../router.js"
 import { rbac, type Permission } from "../../infra/rbac.js"
 import { licenseService } from "../../infra/license.js"
 import { auditLog } from "../../infra/audit-log.js"
-import { jsonResponse, errorResponse, parseJsonBody } from "../middleware.js"
+import { jsonResponse, errorResponse, parseJsonBody } from "../middleware/index.js"
 
 // -------------------------------------------------
 // 辅助：从请求中提取用户 token

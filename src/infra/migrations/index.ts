@@ -11,6 +11,7 @@ import { licenseMigration } from "./004_license.js"
 import { authMigration } from "./005_auth.js"
 import { subscriptionMigration } from "./006_subscription.js"
 import { sessionsUserMigration } from "./007_sessions_user_id.js"
+import { projectsMigration } from "./008_projects.js"
 
 /** 所有迁移，按 ID 升序排列 */
 export const allMigrations: Migration[] = [
@@ -21,4 +22,5 @@ export const allMigrations: Migration[] = [
   authMigration,
   subscriptionMigration,
   sessionsUserMigration,
+  projectsMigration,
 ]

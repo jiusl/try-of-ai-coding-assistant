@@ -18,7 +18,7 @@ import {
   apiErrorResponse,
   requireAuth,
   errorToStructuredResponse,
-} from "../middleware.js"
+} from "../middleware/index.js"
 import { errorToApiError } from "../errors.js"
 import type { ChatRequest } from "../types.js"
 import type { WebSocketManager } from "../websocket.js"
@@ -56,7 +56,7 @@ function autoCreateSessionEffect(): Effect.Effect<{ id: string }> {
 // POST /api/chat/stream — 发送消息（SSE 流式）
 // -------------------------------------------------
 
-function handleChatStream(sessionId: string, message: string, agentId: string | undefined, userId: string): Response {
+function handleChatStream(sessionId: string, message: string, agentId: string | undefined, userId: string, displayMessage?: string): Response {
   const { response, send, close, isConnected } = createSSEResponse()
 
   // 在后台运行 Effect
@@ -65,6 +65,7 @@ function handleChatStream(sessionId: string, message: string, agentId: string | 
 
     try {
       const result = yield* agentService.runAuto(sessionId, message, {
+        ...(displayMessage ? { displayMessage } : {}),
         ...(agentId ? { agentId } : {}),
         onChunk: (chunk: string) => {
           send("chunk", JSON.stringify({ content: chunk }))
@@ -172,7 +173,7 @@ function handleChatStream(sessionId: string, message: string, agentId: string | 
 // POST /api/chat — 发送消息（非流式）
 // -------------------------------------------------
 
-async function handleChatSync(sessionId: string, message: string, agentId: string | undefined, userId: string): Promise<Response> {
+async function handleChatSync(sessionId: string, message: string, agentId: string | undefined, userId: string, displayMessage?: string): Promise<Response> {
   const program = Effect.gen(function* () {
     const agentService = yield* AgentServiceTag
     const confirmationStore = yield* ConfirmationStore
@@ -180,6 +181,7 @@ async function handleChatSync(sessionId: string, message: string, agentId: strin
     // 同步 API 无法弹出确认对话框 → 高敏感操作自动拒绝
     const result = yield* agentService.runAuto(sessionId, message, {
       ...(agentId ? { agentId } : {}),
+      ...(displayMessage ? { displayMessage } : {}),
       onRequireConfirm: (req) => {
         // 同步模式自动拒绝，避免 Deferred 永久阻塞
         AppRuntime.runFork(
@@ -232,7 +234,7 @@ export function registerChatRoutes(router: Router): void {
       return apiErrorResponse("QUOTA_EXCEEDED", quota.reason ?? "配额已用完", 429, quota.resetAt ? { resetAt: quota.resetAt } : undefined)
     }
 
-    const body = await parseJsonBody<ChatRequest>(ctx.request)
+    const body = await parseJsonBody<ChatRequest & { enrichedMessage?: string }>(ctx.request)
 
     let sessionId = body.sessionId || ""
     if (!sessionId) {
@@ -240,7 +242,7 @@ export function registerChatRoutes(router: Router): void {
       sessionId = result.id
     }
 
-    return handleChatStream(sessionId, body.message, body.agentId, authResult.userId)
+    return handleChatStream(sessionId, body.enrichedMessage || body.message, body.agentId, authResult.userId, body.message)
   })
 
   // 同步聊天
@@ -253,7 +255,7 @@ export function registerChatRoutes(router: Router): void {
       return apiErrorResponse("QUOTA_EXCEEDED", quota.reason ?? "配额已用完", 429, quota.resetAt ? { resetAt: quota.resetAt } : undefined)
     }
 
-    const body = await parseJsonBody<ChatRequest>(ctx.request)
+    const body = await parseJsonBody<ChatRequest & { enrichedMessage?: string }>(ctx.request)
 
     let sessionId = body.sessionId || ""
     if (!sessionId) {
@@ -261,7 +263,7 @@ export function registerChatRoutes(router: Router): void {
       sessionId = result.id
     }
 
-    return await handleChatSync(sessionId, body.message, body.agentId, authResult.userId)
+    return await handleChatSync(sessionId, body.enrichedMessage || body.message, body.agentId, authResult.userId, body.message)
   })
 
   // 确认/拒绝高敏感度工具调用

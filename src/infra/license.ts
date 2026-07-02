@@ -334,7 +334,7 @@ class LicenseService {
 
     const result = verifySignedLicense(licenseKey)
     if (!result.valid) {
-      return { valid: false, reason: result.error }
+      return { valid: false, reason: result.error ?? "License 验证失败" }
     }
 
     try {

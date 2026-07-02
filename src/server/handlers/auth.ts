@@ -9,7 +9,7 @@ import { rbac } from "../../infra/rbac.js"
 import { licenseService } from "../../infra/license.js"
 import { subscription } from "../../infra/subscription.js"
 import { logger } from "../../infra/logger.js"
-import { jsonResponse, errorResponse, parseJsonBody } from "../middleware.js"
+import { jsonResponse, errorResponse, parseJsonBody } from "../middleware/index.js"
 
 // -------------------------------------------------
 // 辅助：从请求中提取用户信息

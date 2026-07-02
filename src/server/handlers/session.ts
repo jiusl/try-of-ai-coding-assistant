@@ -17,9 +17,9 @@ import {
   requireAuth,
   apiErrorResponse,
   errorToStructuredResponse,
-} from "../middleware.js"
+} from "../middleware/index.js"
 import type { CreateSessionRequest } from "../types.js"
-import type { SessionInfo, SessionWithMessagesInfo } from "../../session/session.js"
+import type { SessionInfo, SessionWithMessagesInfo, CreateSessionInput } from "../../session/session.js"
 import { subscription } from "../../infra/subscription.js"
 
 // -------------------------------------------------
@@ -43,12 +43,13 @@ export function registerSessionRoutes(router: Router): void {
 
     const limit = parseInt(ctx.query.get("limit") ?? "50")
     const offset = parseInt(ctx.query.get("offset") ?? "0")
+    const projectId = ctx.query.get("project_id") ?? undefined
 
     const result: Response = await AppRuntime.runPromise(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Effect.gen(function* () {
         const svc = yield* Session
-        const sessions = yield* svc.list({ limit, offset, userId })
+        const sessions = yield* svc.list({ limit, offset, userId, ...(projectId ? { projectId } as const : {}) })
         return successResponse<SessionInfo[]>(sessions)
       }) as any).pipe(
         Effect.catchAll(catchToErrorResponse())
@@ -96,7 +97,12 @@ export function registerSessionRoutes(router: Router): void {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (Effect.gen(function* () {
         const svc = yield* Session
-        const created = yield* svc.create({ ...body, userId })
+        const bodyData = body as CreateSessionRequest
+        const input: CreateSessionInput = { userId }
+        if (bodyData.title) input.title = bodyData.title
+        if (bodyData.model) input.model = bodyData.model
+        if (bodyData.project_id) input.projectId = bodyData.project_id
+        const created = yield* svc.create(input)
         return successResponse<SessionInfo>(created, 201)
       }) as any).pipe(
         Effect.catchAll(catchToErrorResponse())

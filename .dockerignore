@@ -1,5 +1,6 @@
 # 依赖
 node_modules/
+src/web/node_modules/
 
 # 版本控制
 .git/

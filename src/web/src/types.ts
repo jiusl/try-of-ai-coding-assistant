@@ -15,6 +15,19 @@ export interface SessionInfo {
   messageCount?: number
   /** 工作目录路径 */
   workspace?: string
+  /** 所属项目 ID */
+  projectId?: string
+}
+
+/** 项目信息 */
+export interface ProjectInfo {
+  id: string
+  name: string
+  path: string
+  lastActivatedAt: string
+  createdAt: string
+  updatedAt: string
+  sessionCount: number
 }
 
 /** 聊天消息 */
@@ -228,4 +241,21 @@ export interface AddSkillResult {
   name: string
   destDir: string
   total: number
+}
+
+// ── 文件浏览 ──
+
+/** 目录项 */
+export interface FileEntry {
+  name: string
+  isDir: boolean
+  size?: number
+}
+
+/** 文件内容 */
+export interface FileContent {
+  content: string
+  language: string
+  size: number
+  path: string
 }

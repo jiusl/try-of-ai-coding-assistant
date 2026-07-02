@@ -11,6 +11,8 @@ import type { ChatMessage, ConfirmRequest, StreamSegment } from "../types"
 import * as api from "../api"
 import { ChatBubble } from "./ChatBubble"
 import { ConfirmDialog } from "./ConfirmDialog"
+import { MiniTimeline } from "./MiniTimeline"
+import { ModelSelectorBar } from "./ModelSelectorBar"
 import { useToast } from "./Toast"
 
 interface ChatPanelProps {
@@ -139,6 +141,15 @@ export function ChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const toast = useToast()
 
+  // ── 滚动位置追踪（用于显示"回到底部"浮动按钮）──
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    setIsAtBottom(nearBottom)
+  }, [])
+
   // ── 文件引用状态 ──
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
@@ -196,8 +207,8 @@ export function ChatPanel({
     // 异步读取所有文件内容，读完后按顺序填充
     const readPromises = placeholders.map((p, i) =>
       readFileContent(validFiles[i]!).then(
-        (content) => ({ idx: i, name: p.name, content }),
-        (_err) => ({ idx: i, name: p.name, content: "", error: true }),
+        (content): { idx: number; name: string; content: string; error?: boolean } => ({ idx: i, name: p.name, content }),
+        (_err): { idx: number; name: string; content: string; error?: boolean } => ({ idx: i, name: p.name, content: "", error: true }),
       )
     )
 
@@ -282,7 +293,8 @@ export function ChatPanel({
     if (!el) return
     const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
     if (force || isNearBottom) {
-      el.scrollTop = el.scrollHeight
+      el.scrollTo({ top: el.scrollHeight, behavior: force ? "smooth" : "auto" })
+      if (force) setIsAtBottom(true)
     }
   }, [])
 
@@ -334,6 +346,9 @@ export function ChatPanel({
     const newMessages = [...messages, userMsg]
     onMessagesChange(newMessages)
 
+    // 强制滚动到底部，确保用户能看到自己刚发的消息
+    requestAnimationFrame(() => scrollToBottom(true))
+
     const controller = new AbortController()
     abortRef.current = controller
 
@@ -345,7 +360,7 @@ export function ChatPanel({
       const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers,
-        body: JSON.stringify({ sessionId, message: enrichedMessage, agentId }),
+        body: JSON.stringify({ sessionId, message, enrichedMessage, agentId }),
         signal: controller.signal,
       })
 
@@ -422,29 +437,14 @@ export function ChatPanel({
                 })
                 break
               case "done":
-                // Finalize
+                // Finalize — 工具调用不存入 messages，仅保留 assistant 回复
                 const doneContent = parsed.content || fullContent
                 const assistantMsg: ChatMessage = {
                   role: "assistant",
                   content: doneContent,
                   timestamp: new Date().toISOString(),
                 }
-                // 合并流式 segments 到 messages
-                const finalMessages = [...newMessages, assistantMsg]
-                // 插入 tool 消息
-                const ss = [...streamSegments]
-                for (const seg of ss) {
-                  if (seg.type === "tool") {
-                    finalMessages.push({
-                      role: "tool",
-                      content: seg.payload.arguments,
-                      name: seg.payload.tool,
-                      result: seg.payload.result || "",
-                      timestamp: new Date().toISOString(),
-                    })
-                  }
-                }
-                onMessagesChange(finalMessages)
+                onMessagesChange([...newMessages, assistantMsg])
                 setIsStreaming(false)
                 setStreamContent("")
                 setStreamSegments([])
@@ -677,47 +677,75 @@ export function ChatPanel({
         overflowY="auto"
         px={4}
         py={4}
+        onScroll={handleScroll}
       >
         {showWelcome && messages.length === 0 && (
           <WelcomeScreen onQuickAction={handleQuickAction} />
         )}
 
+        {/* 消息列表 */}
         {messages.map((msg, i) => (
-          <ChatBubble
-            key={i}
-            msg={msg}
-            onEdit={() => handleEdit(i)}
-            onCopy={() => handleCopy(i)}
-            onRegenerate={() => handleRegenerate(i)}
-          />
+          <div key={i} data-msg-index={i} data-role={msg.role}>
+            <ChatBubble
+              msg={msg}
+              onEdit={() => handleEdit(i)}
+              onCopy={() => handleCopy(i)}
+              onRegenerate={() => handleRegenerate(i)}
+            />
+          </div>
         ))}
 
-        {/* 流式输出中的临时助手气泡 */}
-        {isStreaming && (
-          <ChatBubble
-            msg={{ role: "assistant", content: streamContent || "思考中…", timestamp: new Date().toISOString() }}
-            isStreaming
-          />
-        )}
-
-        {/* 流式工具卡片 */}
-        {isStreaming && streamSegments.map((seg, i) =>
-          seg.type === "tool" ? (
+        {/* 流式输出中的临时气泡 — 工具调用状态合并为文字 */}
+        {isStreaming && (() => {
+          const toolNames = streamSegments.filter(s => s.type === "tool").map(s => s.payload.tool)
+          const statusText = toolNames.length > 0
+            ? `调用工具中：${toolNames.join("、")}`
+            : (streamContent || "思考中…")
+          return (
             <ChatBubble
-              key={`tool-${i}`}
-              msg={{
-                role: "tool",
-                content: seg.payload.arguments,
-                name: seg.payload.tool,
-                result: seg.payload.result || "",
-                timestamp: new Date().toISOString(),
-              }}
+              msg={{ role: "assistant", content: statusText, timestamp: new Date().toISOString() }}
+              isStreaming
             />
-          ) : null
-        )}
+          )
+        })()}
 
         <div ref={messagesEndRef} />
       </Box>
+
+      {/* 浮动"回到底部"按钮 — 右下角小圆形，不遮挡内容 */}
+      {!isAtBottom && (
+        <Box
+          position="absolute"
+          bottom="100px"
+          right="28px"
+          zIndex={25}
+        >
+          <Box
+            as="button"
+            w="36px"
+            h="36px"
+            borderRadius="full"
+            bg="gray.800"
+            border="1px solid"
+            borderColor="gray.600"
+            color="gray.300"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            cursor="pointer"
+            fontSize="lg"
+            boxShadow="0 2px 10px rgba(0,0,0,0.4)"
+            onClick={() => scrollToBottom(true)}
+            animation="fadeIn 0.2s ease"
+            title="回到底部"
+          >
+            ↓
+          </Box>
+        </Box>
+      )}
+
+      {/* 右侧迷你时间线 — DeepSeek 风格对话大纲 */}
+      <MiniTimeline messages={messages} scrollContainerRef={scrollContainerRef} />
 
       {/* 输入区域 */}
       <Box
@@ -815,6 +843,9 @@ export function ChatPanel({
           {input.length > 0 && `${input.length} 字符`}
         </Text>
       </Box>
+
+      {/* 模型选择器 */}
+      <ModelSelectorBar />
 
       {/* 确认对话框 */}
       <ConfirmDialog

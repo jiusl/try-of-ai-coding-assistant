@@ -3,12 +3,11 @@
 // 设置抽屉面板
 // ====================================================
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import {
-  Box, Button, Code, HStack, IconButton, Input, Select, Slider, Text, VStack, Separator, Wrap,
-  createListCollection,
+  Box, Button, Code, HStack, IconButton, Input, Text, VStack, Separator,
 } from "@chakra-ui/react"
-import type { AppConfig, LicenseInfo, ProviderName } from "../types"
+import type { AppConfig, LicenseInfo } from "../types"
 import * as api from "../api"
 import { TierPanel } from "./TierPanel"
 import { ToolSkillManager } from "./ToolSkillManager"
@@ -20,13 +19,6 @@ interface SettingsDrawerProps {
   quotaVersion?: number
   /** License 激活成功后触发，用于刷新配额 UI */
   onLicenseActivated?: () => void
-}
-
-const PROVIDER_MODELS: Record<string, string[]> = {
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini", "o1", "o1-mini"],
-  anthropic: ["claude-sonnet-4-20250514", "claude-3.5-sonnet", "claude-3.5-haiku", "claude-3-opus"],
-  deepseek: ["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"],
-  ollama: ["qwen2.5-0.5b-instruct", "qwen2.5-7b-instruct", "llama3.2-3b-instruct", "codellama-7b-instruct", "deepseek-r1-8b", "mistral-7b-instruct"],
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -78,10 +70,6 @@ export function SettingsDrawer({ open, onClose, quotaVersion, onLicenseActivated
     }
   }
 
-  const updateModel = (key: string, value: any) => {
-    setConfig((c) => c ? { ...c, model: { ...c.model, [key]: value } } : c)
-  }
-
   const updateProvider = (pName: string, field: string, value: string) => {
     setConfig((c) => {
       if (!c) return c
@@ -114,12 +102,6 @@ export function SettingsDrawer({ open, onClose, quotaVersion, onLicenseActivated
       setActivating(false)
     }
   }
-
-  // Provider 选择项的 collection
-  const providerCollection = useMemo(
-    () => createListCollection({ items: Object.keys(PROVIDER_LABELS).map((k) => ({ value: k, label: PROVIDER_LABELS[k] || k })) }),
-    [],
-  )
 
   return (
     <Box display={open ? "block" : "none"}>
@@ -160,113 +142,6 @@ export function SettingsDrawer({ open, onClose, quotaVersion, onLicenseActivated
 
         {config && (
           <>
-            {/* 模型配置 */}
-            <VStack align="stretch" gap={3}>
-              <Text fontSize="sm" fontWeight="bold" color="gray.300">模型</Text>
-
-              <Box>
-                <Text fontSize="xs" color="gray.500" mb={1}>Provider</Text>
-                <Select.Root
-                  collection={providerCollection}
-                  size="sm"
-                  value={[config.model.provider]}
-                  onValueChange={(d) => updateModel("provider", d.value[0]!)}
-                >
-                  <Select.HiddenSelect />
-                  <Select.Control>
-                    <Select.Trigger bg="gray.800" border="none" color="gray.200">
-                      <Select.ValueText />
-                    </Select.Trigger>
-                    <Select.IndicatorGroup>
-                      <Select.Indicator color="gray.400" />
-                    </Select.IndicatorGroup>
-                  </Select.Control>
-                  <Select.Positioner>
-                    <Select.Content bg="gray.750" borderColor="gray.600" shadow="lg">
-                      {providerCollection.items.map((item) => (
-                        <Select.Item
-                          key={item.value}
-                          item={item}
-                          color="gray.200"
-                          _highlighted={{ bg: "gray.700", color: "white" }}
-                          _selected={{ bg: "blue.800", color: "blue.200" }}
-                        >
-                          {item.label}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Positioner>
-                </Select.Root>
-              </Box>
-
-              <Box>
-                <Text fontSize="xs" color="gray.500" mb={1}>模型名</Text>
-                <Input
-                  size="sm"
-                  value={config.model.model}
-                  onChange={(e) => updateModel("model", e.target.value)}
-                  placeholder="输入模型名…"
-                  bg="gray.800"
-                  border="none"
-                  color="gray.200"
-                  _placeholder={{ color: "gray.500" }}
-                />
-                {(PROVIDER_MODELS[config.model.provider]?.length ?? 0) > 0 && (
-                  <Wrap mt={2} gap={1.5}>
-                    {PROVIDER_MODELS[config.model.provider]!.map((m) => (
-                      <Box
-                        key={m}
-                        as="button"
-                        fontSize="xs"
-                        px={2} py={0.5}
-                        bg={config.model.model === m ? "blue.900" : "gray.800"}
-                        color={config.model.model === m ? "blue.300" : "gray.400"}
-                        border="1px solid"
-                        borderColor={config.model.model === m ? "blue.700" : "gray.700"}
-                        borderRadius="md"
-                        cursor="pointer"
-                        _hover={{ bg: "gray.700", color: "gray.200" }}
-                        onClick={() => updateModel("model", m)}
-                      >
-                        {m}
-                      </Box>
-                    ))}
-                  </Wrap>
-                )}
-              </Box>
-
-              <Box>
-                <HStack justify="space-between">
-                  <Text fontSize="xs" color="gray.500">Temperature</Text>
-                  <Text fontSize="xs" color="gray.400">{config.model.temperature.toFixed(2)}</Text>
-                </HStack>
-                <Slider.Root
-                  min={0} max={2} step={0.05}
-                  value={[config.model.temperature]}
-                  onValueChange={(d) => updateModel("temperature", d.value[0])}
-                >
-                  <Slider.Control>
-                    <Slider.Track>
-                      <Slider.Range />
-                    </Slider.Track>
-                    <Slider.Thumbs />
-                  </Slider.Control>
-                </Slider.Root>
-              </Box>
-
-              <Box>
-                <Text fontSize="xs" color="gray.500" mb={1}>Max Tokens</Text>
-                <Input
-                  size="sm"
-                  type="number"
-                  value={config.model.maxTokens}
-                  onChange={(e) => updateModel("maxTokens", parseInt(e.target.value) || 4096)}
-                  bg="gray.800"
-                  border="none"
-                />
-              </Box>
-            </VStack>
-
             {/* Provider Keys */}
             <VStack align="stretch" gap={4}>
               <Text fontSize="sm" fontWeight="bold" color="gray.300">API Keys</Text>
@@ -327,6 +202,25 @@ export function SettingsDrawer({ open, onClose, quotaVersion, onLicenseActivated
                 )
               })}
             </VStack>
+          </>
+        )}
+
+        {/* 工具 & Skill 管理 */}
+        {config && (
+          <>
+            <Separator borderColor="gray.700" />
+            <VStack align="stretch" gap={3}>
+              <Text fontSize="sm" fontWeight="bold" color="gray.300">🧰 工具与技能管理</Text>
+              <ToolSkillManager {...(quotaVersion !== undefined ? { refreshKey: quotaVersion } : {})} />
+            </VStack>
+          </>
+        )}
+
+        {/* 订阅/等级面板 */}
+        {config && (
+          <>
+            <Separator borderColor="gray.700" />
+            <TierPanel {...(quotaVersion !== undefined ? { refreshKey: quotaVersion } : {})} />
           </>
         )}
 
@@ -401,25 +295,6 @@ export function SettingsDrawer({ open, onClose, quotaVersion, onLicenseActivated
               <Text fontSize="xs" color="gray.600" fontStyle="italic">
                 💡 开发模式设置 <Code fontSize="xs" color="gray.500">TRY_DEV_MODE=true</Code> 后可直接输入 pro / enterprise 激活
               </Text>
-            </VStack>
-          </>
-        )}
-
-        {/* 订阅/等级面板 */}
-        {config && (
-          <>
-            <Separator borderColor="gray.700" />
-            <TierPanel refreshKey={quotaVersion} />
-          </>
-        )}
-
-        {/* 工具 & Skill 管理 */}
-        {config && (
-          <>
-            <Separator borderColor="gray.700" />
-            <VStack align="stretch" gap={3}>
-              <Text fontSize="sm" fontWeight="bold" color="gray.300">🧰 工具与技能管理</Text>
-              <ToolSkillManager refreshKey={quotaVersion} />
             </VStack>
           </>
         )}

@@ -76,4 +76,5 @@ export interface ChatRequest {
 export interface CreateSessionRequest {
   title?: string
   model?: string
+  project_id?: string
 }

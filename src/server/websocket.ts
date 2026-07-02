@@ -6,6 +6,17 @@
 
 import type { Server } from "bun"
 import type { SSEEventType } from "./types.js"
+import type { TerminalManager } from "./terminal-mgr.js"
+
+// ====================================================
+// WebSocket Data 类型（用于 ws.data）
+// ====================================================
+
+export interface WSData {
+  clientId: string
+  type?: "terminal"
+  terminalSessionId?: string
+}
 
 // ====================================================
 // 消息协议
@@ -49,7 +60,7 @@ export interface ToolCallPayload {
 
 interface WSClient {
   id: string
-  socket: import("bun").ServerWebSocket<{ clientId: string }>
+  socket: import("bun").ServerWebSocket<WSData>
   subscribedSessions: Set<string>
   connectedAt: number
   lastPing: number
@@ -120,18 +131,24 @@ export class WebSocketManager {
   }
 
   /** 创建 Bun WebSocket 配置 */
-  static createConfig(manager: WebSocketManager) {
+  static createConfig(manager: WebSocketManager, terminalMgr?: TerminalManager) {
     // 启动僵尸清理
     manager.startZombieCleanup()
 
     return {
-      data: {} as { clientId: string },
+      data: {} as WSData,
 
-      open(ws: import("bun").ServerWebSocket<{ clientId: string }>) {
+      open(ws: import("bun").ServerWebSocket<WSData>) {
         const clientId = crypto.randomUUID()
         // Bun v1.3.14 Windows: data 可能未初始化
-        if (!ws.data) ws.data = { clientId: "" } as { clientId: string }
+        if (!ws.data) ws.data = { clientId: "" } as WSData
         ws.data.clientId = clientId
+
+        // ── 终端连接：委托给 TerminalManager ──
+        if (ws.data.type === "terminal" && ws.data.terminalSessionId) {
+          terminalMgr?.handleOpen(ws as any, clientId, ws.data.terminalSessionId)
+          return
+        }
 
         const ip = WebSocketManager.getRemoteIP(ws)
 
@@ -162,9 +179,15 @@ export class WebSocketManager {
       },
 
       message(
-        ws: import("bun").ServerWebSocket<{ clientId: string }>,
+        ws: import("bun").ServerWebSocket<WSData>,
         message: string | Buffer,
       ) {
+        // ── 终端连接：转发到 shell stdin ──
+        if (ws.data?.type === "terminal") {
+          terminalMgr?.handleMessage(ws as any, message)
+          return
+        }
+
         const clientId = ws.data?.clientId
         if (!clientId) return
         const client = manager.clients.get(clientId)
@@ -185,7 +208,13 @@ export class WebSocketManager {
         }
       },
 
-      close(ws: import("bun").ServerWebSocket<{ clientId: string }>) {
+      close(ws: import("bun").ServerWebSocket<WSData>) {
+        // ── 终端连接：清理 shell 进程 ──
+        if (ws.data?.type === "terminal") {
+          terminalMgr?.handleClose(ws as any)
+          return
+        }
+
         const clientId = ws.data?.clientId
         if (!clientId) return
         manager.removeClient(clientId)

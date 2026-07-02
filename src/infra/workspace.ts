@@ -46,23 +46,23 @@ export function sanitizeWorkspace(raw: string): string {
   return normalized
 }
 
-/**
- * 列出工作目录下的直接子目录（供前端选择器使用）。
- */
-export function listWorkspaceSubdirs(base: string): string[] {
-  const { readdirSync, statSync } = require("fs")
-  const { join } = require("path")
-  try {
-    return readdirSync(base)
-      .filter((name: string) => {
-        try {
-          return statSync(join(base, name)).isDirectory() && !name.startsWith(".")
-        } catch {
-          return false
-        }
-      })
-      .map((name: string) => join(base, name))
-  } catch {
-    return []
-  }
-}
+// /**
+//  * 列出工作目录下的直接子目录（供前端选择器使用）。
+//  */
+// export function listWorkspaceSubdirs(base: string): string[] {
+//   const { readdirSync, statSync } = require("fs")
+//   const { join } = require("path")
+//   try {
+//     return readdirSync(base)
+//       .filter((name: string) => {
+//         try {
+//           return statSync(join(base, name)).isDirectory() && !name.startsWith(".")
+//         } catch {
+//           return false
+//         }
+//       })
+//       .map((name: string) => join(base, name))
+//   } catch {
+//     return []
+//   }
+// }

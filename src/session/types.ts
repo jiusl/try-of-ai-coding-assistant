@@ -16,6 +16,8 @@ export interface SessionInfo {
   status: "active" | "archived" | "deleted"
   /** 工作目录路径（绝对路径），默认为 <项目>/workspace/ */
   workspace: string
+  /** 所属项目 ID */
+  projectId: string
 }
 
 export interface SessionWithMessagesInfo extends SessionInfo {
@@ -29,6 +31,8 @@ export interface CreateSessionInput {
   userId?: string
   /** 工作目录路径（可选，不填则默认 <项目>/workspace/） */
   workspace?: string
+  /** 所属项目 ID（可选，默认 __default__） */
+  projectId?: string
 }
 
 // ====================================================
@@ -39,7 +43,7 @@ export interface SessionService {
   readonly create: (input?: CreateSessionInput) => Effect.Effect<SessionInfo, Error>
   readonly get: (id: string) => Effect.Effect<Option.Option<SessionInfo>, Error>
   readonly getWithMessages: (id: string) => Effect.Effect<Option.Option<SessionWithMessagesInfo>, Error>
-  readonly list: (options?: { limit?: number; offset?: number; userId?: string }) => Effect.Effect<SessionInfo[], Error>
+  readonly list: (options?: { limit?: number; offset?: number; userId?: string; projectId?: string }) => Effect.Effect<SessionInfo[], Error>
   readonly addUserMessage: (sessionId: string, content: string) => Effect.Effect<Message, Error>
   readonly addAssistantMessage: (sessionId: string, content: string) => Effect.Effect<Message, Error>
   readonly addAssistantMessageWithToolCalls: (sessionId: string, content: string | null, toolCalls: ToolCall[]) => Effect.Effect<Message, Error>

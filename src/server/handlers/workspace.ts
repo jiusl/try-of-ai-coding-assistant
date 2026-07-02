@@ -7,13 +7,13 @@ import { Effect, Option } from "effect"
 import type { Router } from "../router.js"
 import { AppRuntime } from "../../effect/app-runtime.js"
 import { Session } from "../../session/session.js"
-import { defaultWorkspace, listWorkspaceSubdirs, sanitizeWorkspace } from "../../infra/workspace.js"
+import { defaultWorkspace, sanitizeWorkspace } from "../../infra/workspace.js"
 import {
   successResponse,
   errorResponse,
   requireAuth,
   errorToStructuredResponse,
-} from "../middleware.js"
+} from "../middleware/index.js"
 
 // -------------------------------------------------
 // 原生文件夹选择器（跨平台）
@@ -104,11 +104,10 @@ function catchToErrorResponse(): (err: unknown) => Effect.Effect<Response> {
 
 export function registerWorkspaceRoutes(router: Router): void {
 
-  // GET /api/workspace — 获取默认工作目录和子目录列表
+  // GET /api/workspace — 获取默认工作目录
   router.get("/api/workspace", () => {
     const ws = defaultWorkspace()
-    const subdirs = listWorkspaceSubdirs(ws)
-    return successResponse({ workspace: ws, subdirs })
+    return successResponse({ workspace: ws })
   })
 
   // GET /api/sessions/:id/workspace — 获取会话工作目录
@@ -139,8 +138,8 @@ export function registerWorkspaceRoutes(router: Router): void {
     const authResult = requireAuth(ctx)
     if (authResult instanceof Response) return authResult
     const id = ctx.params["id"]!
-    const body = await ctx.request.json().catch(() => ({}))
-    const workspace = body?.workspace
+    const body = await ctx.request.json().catch(() => ({})) as Record<string, unknown>
+    const workspace = body.workspace
 
     if (!workspace || typeof workspace !== "string") {
       return errorResponse("缺少 workspace 参数", 400)
@@ -162,8 +161,8 @@ export function registerWorkspaceRoutes(router: Router): void {
 
   // POST /api/workspace/browse — 打开原生文件夹浏览对话框，返回选中路径
   router.post("/api/workspace/browse", async (ctx) => {
-    const body = await ctx.request.json().catch(() => ({}))
-    const currentDir = (body?.currentDir as string) || defaultWorkspace()
+    const body = await ctx.request.json().catch(() => ({})) as Record<string, unknown>
+    const currentDir = (body.currentDir as string) || defaultWorkspace()
 
     try {
       const selectedPath = await openNativeFolderPicker(currentDir)

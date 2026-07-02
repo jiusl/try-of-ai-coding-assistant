@@ -70,8 +70,8 @@ export function ConfirmDialog({ open, request, onApprove, onDeny }: ConfirmDialo
   const argsDisplay = typeof request.args === "string" ? request.args : JSON.stringify(request.args || {}, null, 2)
 
   return (
-    <Box style={overlayStyle} onClick={loading ? undefined : handleDeny}>
-        <Box style={cardStyle} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+    <Box style={overlayStyle}>
+        <Box style={cardStyle}>
           <VStack gap={4} align="stretch">
             {/* 头部 */}
             <HStack gap={2}>

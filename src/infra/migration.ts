@@ -18,8 +18,8 @@ export interface Migration {
   name: string
   /** 向上迁移 SQL，或接收 db 的函数用于需要逻辑判断的场景 */
   up: string | ((db: BunDatabase) => void)
-  /** 向下回滚 SQL（可选） */
-  down?: string
+  /** 向下回滚 SQL（可选），支持函数用于需要逻辑判断的场景 */
+  down?: string | ((db: BunDatabase) => void)
 }
 
 /** 迁移记录（来自 _migrations 表） */

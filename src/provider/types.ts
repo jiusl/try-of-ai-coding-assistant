@@ -50,6 +50,8 @@ export interface StreamChunk {
   content?: string
   tool_call?: ToolCall
   error?: Error
+  /** done chunk 可携带 usage（OpenAI streaming 最后一帧） */
+  usage?: TokenUsage
 }
 
 // ========== 配置类型 ==========

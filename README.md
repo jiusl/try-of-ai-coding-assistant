@@ -27,14 +27,14 @@
 
 - 🧠 **多模型支持** — OpenAI / Anthropic / DeepSeek / Ollama / 本地 llama.cpp
 - 🤖 **8 个内置 Agent** — Chat / Builder / Coder / Reviewer / Tester / Refactor / Researcher / Orchestrator
-- 🔧 **14 个内置工具** — 读写文件、代码搜索、命令执行、网页抓取、记忆系统（Python 实现）
-- 📁 **Workspace 管理** — 会话级别工作目录隔离，前端实时切换，持久化存储
+- 🔧 **14 个内置工具** — 读写文件、代码搜索、命令执行、网页抓取、记忆系统
+- 📁 **Workspace + Project 管理** — 多 Project 切换，文件预览，会话级工作目录隔离
 - 🔐 **权限控制** — 基于规则的细粒度工具权限，支持敏感操作确认，RBAC 角色管理
-- 📚 **Skill 系统** — 可扩展的知识注入，内置架构指南、代码审查规范、PR 模板
+- 📚 **Skill 系统** — 可扩展的知识注入（Skill 自动注入到 System Prompt），内置架构指南、代码审查规范、PR 模板
 - 🧠 **记忆系统** — 自动压缩与嵌入检索，跨会话记忆上下文
-- 🌐 **Web UI + CLI** — 支持终端对话和浏览器界面两种交互方式
-- 📡 **SSE 流式推送** — 实时流式输出，支持工具调用可视化
-- 🏗️ **Effect-TS 架构** — 函数式依赖注入、类型安全的错误处理
+- 🌐 **Web UI + CLI** — 终端对话 / 浏览器界面双模式，模型快速切换，终端模拟器集成
+- 📡 **SSE 流式推送** — 实时流式输出，支持工具调用可视化与步骤时间线
+- 🏗️ **Effect-TS 架构** — 函数式依赖注入、类型安全的错误处理，中间件模块化拆分
 - 🐳 **Docker 支持** — 提供完整 Docker / docker-compose 一键部署方案
 - 🛡️ **License 授权** — RSA 公钥签名离线验证，支持有效期和设备绑定
 
@@ -347,6 +347,36 @@ Builder → Researcher (查资料)
 | `GET` | `/api/workspace` | 获取默认 workspace 和子目录列表 |
 | `GET` | `/api/sessions/:id/workspace` | 获取会话的 workspace 配置 |
 | `PUT` | `/api/sessions/:id/workspace` | 更新会话的 workspace 路径 |
+| `GET` | `/api/files?path=<path>` | 浏览目录 / 读取文件内容 |
+| `GET` | `/api/projects` | 列出所有项目 |
+| `POST` | `/api/projects` | 创建新项目 |
+| `PUT` | `/api/projects/:id` | 更新项目信息 |
+| `DELETE` | `/api/projects/:id` | 删除项目 |
+
+---
+
+## Project 管理
+
+Project 是比 Workspace 更高层的组织单元，每个 Project 关联一个独立的目录，支持多项目切换和文件预览：
+
+- **多项目支持**: 创建多个 Project，每个指向不同目录，Web UI 实时切换
+- **文件预览**: 一键预览项目中的 README、package.json 等关键文件，快速了解项目结构
+- **会话关联**: 每个会话可绑定一个 Project，Agent 自动感知项目上下文
+- **持久化**: Project 信息存储在 SQLite 中，重启不丢失
+
+### 数据库迁移
+
+Project 表由迁移 `008_projects.ts` 自动创建：
+
+```sql
+CREATE TABLE IF NOT EXISTS projects (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  path TEXT NOT NULL UNIQUE,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+)
+```
 
 ---
 
@@ -461,36 +491,50 @@ try/
 │   ├── server/               # Web 服务
 │   │   ├── index.ts          # 服务入口
 │   │   ├── router.ts         # 路由注册
-│   │   ├── middleware.ts     # 全局中间件
+│   │   ├── middleware/       # 中间件模块（CORS/日志/认证/限流/静态文件）
 │   │   ├── websocket.ts      # WebSocket 实时通信
+│   │   ├── errors.ts         # 全局错误处理与负载均衡
+│   │   ├── openapi.ts        # OpenAPI 文档生成
+│   │   ├── terminal-mgr.ts   # 终端会话管理
 │   │   ├── handlers/         # API 路由处理
 │   │   │   ├── agent.ts      # Agent 调用
 │   │   │   ├── chat.ts       # 流式对话
 │   │   │   ├── session.ts    # 会话管理
-│   │   │   ├── workspace.ts  # Workspace API
 │   │   │   ├── config.ts     # 配置管理
-│   │   │   ├── auth.ts       # 认证授权
+│   │   │   ├── files.ts      # 文件浏览 & 读写 API
+│   │   │   ├── skills-management.ts  # Skill CRUD
+│   │   │   ├── tools-management.ts   # Tool CRUD
 │   │   │   └── ...
 │   │   └── static/           # 前端静态资源（构建产物）
 │   ├── cli/                  # CLI 界面
+│   │   ├── index.ts          # CLI 入口
 │   │   ├── repl.ts           # 交互式 REPL
-│   │   └── commands/         # 命令定义
+│   │   ├── output.ts         # 终端输出格式化
+│   │   └── commands/         # 命令定义（agent/chat/run/tool/web）
+│   ├── bin/                  # CLI 启动入口（编译目标）
+│   │   └── try.ts
 │   ├── infra/                # 基础设施
-│   │   ├── database.ts       # 数据库连接
+│   │   ├── database.ts       # 数据库连接（SQLite + FTS5）
 │   │   ├── env.ts            # 环境变量
 │   │   ├── fs-util.ts        # 文件系统工具
-│   │   ├── python-env.ts     # Python 环境管理
-│   │   ├── workspace.ts      # Workspace 管理
-│   │   ├── license.ts        # License 验证
+│   │   ├── python-env.ts     # Python 环境自动检测
+│   │   ├── license.ts        # License 验证（RSA 公钥）
 │   │   ├── logger.ts         # 结构化日志
 │   │   ├── metrics.ts        # Prometheus 指标
 │   │   └── ...
+│   ├── project/              # 项目管理（多 Project 加载与文件预览）
 │   ├── web/                  # React 前端源码
 │   │   ├── src/
 │   │   │   ├── App.tsx
 │   │   │   ├── components/
-│   │   │   │   └── WorkspacePicker.tsx
+│   │   │   │   ├── WorkspacePicker.tsx   # Workspace 切换
+│   │   │   │   ├── ChatPanel.tsx         # 对话面板
+│   │   │   │   ├── FileExplorer.tsx      # 文件浏览器
+│   │   │   │   ├── Timeline.tsx          # 步骤时间线
+│   │   │   │   ├── Terminal.tsx          # 终端模拟器
+│   │   │   │   └── SettingsDrawer.tsx    # 设置面板
 │   │   │   └── ...
+│   │   ├── package.json
 │   │   └── vite.config.ts
 │   └── effect/               # Effect-TS 工具层
 ├── tools/                    # 工具实现（Python + TOOL.md）

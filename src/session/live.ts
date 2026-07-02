@@ -95,17 +95,27 @@ export const SessionLive = Layer.effect(
 
         const userId = input?.userId ?? "legacy"
 
-        const workspace = input?.workspace || defaultWorkspace()
+        const projectId = input?.projectId ?? "__default__"
+        // 如果没传 workspace 但指定了项目，用项目路径作为默认工作目录
+        let workspace = input?.workspace
+        if (!workspace) {
+          const rows = yield* db.query<{ path: string }>(
+            "SELECT path FROM projects WHERE id = ?",
+            [projectId]
+          )
+          workspace = rows[0]?.path || defaultWorkspace()
+        }
 
         yield* db.run(
-          `INSERT INTO sessions (id, title, created_at, updated_at, status, user_id, workspace) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, title, now, now, "active", userId, workspace]
+          `INSERT INTO sessions (id, title, created_at, updated_at, status, user_id, workspace, project_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [id, title, now, now, "active", userId, workspace, projectId]
         )
 
         return {
           id,
           title,
           workspace,
+          projectId,
           createdAt: new Date(now),
           updatedAt: new Date(now),
           messageCount: 0,
@@ -126,11 +136,12 @@ export const SessionLive = Layer.effect(
           updated_at: number
           status: string
           workspace: string
+          project_id: string
           message_count: number
           last_message_at: number | null
         }>(
           `SELECT 
-            s.id, s.title, s.created_at, s.updated_at, s.status, s.workspace,
+            s.id, s.title, s.created_at, s.updated_at, s.status, s.workspace, s.project_id,
             COUNT(m.id) as message_count,
             MAX(m.created_at) as last_message_at
            FROM sessions s
@@ -149,6 +160,7 @@ export const SessionLive = Layer.effect(
           id: row.id,
           title: row.title,
           workspace: row.workspace || defaultWorkspace(),
+          projectId: row.project_id || "__default__",
           createdAt: new Date(row.created_at),
           updatedAt: new Date(row.updated_at),
           messageCount: row.message_count,
@@ -207,11 +219,12 @@ export const SessionLive = Layer.effect(
     // ====================================================
     // 列出所有会话
     // ====================================================
-    const list = (options?: { limit?: number; offset?: number; userId?: string }) =>
+    const list = (options?: { limit?: number; offset?: number; userId?: string; projectId?: string }) =>
       Effect.gen(function* () {
         const limit = options?.limit ?? 50
         const offset = options?.offset ?? 0
         const userId = options?.userId
+        const projectId = options?.projectId
 
         let sql = `
           SELECT 
@@ -221,6 +234,7 @@ export const SessionLive = Layer.effect(
             s.updated_at,
             s.status,
             s.workspace,
+            s.project_id,
             COUNT(m.id) as message_count,
             MAX(m.created_at) as last_message_at
           FROM sessions s
@@ -231,6 +245,11 @@ export const SessionLive = Layer.effect(
         if (userId) {
           sql += ` AND s.user_id = ?`
           params.push(userId)
+        }
+
+        if (projectId) {
+          sql += ` AND s.project_id = ?`
+          params.push(projectId)
         }
 
         sql += `
@@ -246,6 +265,7 @@ export const SessionLive = Layer.effect(
           updated_at: number
           status: string
           workspace: string
+          project_id: string
           message_count: number
           last_message_at: number | null
         }>(sql, params)
@@ -254,6 +274,7 @@ export const SessionLive = Layer.effect(
           id: row.id,
           title: row.title,
           workspace: row.workspace || defaultWorkspace(),
+          projectId: row.project_id || "__default__",
           createdAt: new Date(row.created_at),
           updatedAt: new Date(row.updated_at),
           messageCount: row.message_count,
@@ -546,6 +567,7 @@ export const SessionMockLive = Layer.succeed(Session, {
       id,
       title: "Mock Session",
       workspace: defaultWorkspace(),
+      projectId: "__default__",
       createdAt: new Date(),
       updatedAt: new Date(),
       messageCount: 0,
@@ -558,6 +580,7 @@ export const SessionMockLive = Layer.succeed(Session, {
       id,
       title: "Mock Session",
       workspace: defaultWorkspace(),
+      projectId: "__default__",
       createdAt: new Date(),
       updatedAt: new Date(),
       messageCount: 0,
