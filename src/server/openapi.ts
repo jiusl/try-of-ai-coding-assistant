@@ -318,6 +318,119 @@ schema("LicenseInfo", {
   },
 })
 
+// Project
+schema("ProjectInfo", {
+  type: "object",
+  properties: {
+    id:               { type: "string" },
+    name:             { type: "string" },
+    path:             { type: "string" },
+    lastActivatedAt:  { type: "string", format: "date-time" },
+    createdAt:        { type: "string", format: "date-time" },
+    updatedAt:        { type: "string", format: "date-time" },
+    sessionCount:     { type: "integer" },
+  },
+})
+
+// Tool & Skill
+schema("ToolInfo", {
+  type: "object",
+  properties: {
+    name:        { type: "string" },
+    source:      { type: "string", enum: ["builtin", "user", "remote"] },
+    category:    { type: "string" },
+    description: { type: "string" },
+    loaded:      { type: "boolean" },
+    error:       { type: "string" },
+    toolDir:     { type: "string" },
+  },
+})
+
+schema("SkillInfo", {
+  type: "object",
+  properties: {
+    name:        { type: "string" },
+    source:      { type: "string", enum: ["builtin", "user", "remote"] },
+    category:    { type: "string" },
+    description: { type: "string" },
+    loaded:      { type: "boolean" },
+    error:       { type: "string" },
+    skillDir:    { type: "string" },
+  },
+})
+
+// Files
+schema("FileEntry", {
+  type: "object",
+  properties: {
+    name:   { type: "string" },
+    isDir:  { type: "boolean" },
+    size:   { type: "integer" },
+    mtime:  { type: "string", format: "date-time" },
+  },
+})
+
+schema("FileContent", {
+  type: "object",
+  properties: {
+    path:     { type: "string" },
+    content:  { type: "string" },
+    language: { type: "string" },
+    size:     { type: "integer" },
+  },
+})
+
+// Workspace
+schema("WorkspaceInfo", {
+  type: "object",
+  properties: {
+    workspace: { type: "string" },
+    valid:     { type: "boolean" },
+  },
+})
+
+// Subscription
+schema("TierInfo", {
+  type: "object",
+  properties: {
+    id:          { type: "string" },
+    name:        { type: "string" },
+    maxUsers:    { type: "integer" },
+    maxSessions: { type: "integer" },
+    features:    { type: "object" },
+  },
+})
+
+schema("QuotaInfo", {
+  type: "object",
+  properties: {
+    tier:          { type: "string" },
+    userCount:     { type: "integer" },
+    maxUsers:      { type: "integer" },
+    sessionCount:  { type: "integer" },
+    maxSessions:   { type: "integer" },
+  },
+})
+
+// RBAC
+schema("RoleInfo", {
+  type: "object",
+  properties: {
+    id:          { type: "string" },
+    name:        { type: "string" },
+    permissions: { type: "array", items: { type: "string" } },
+  },
+})
+
+// WebSocket stats
+schema("WsStats", {
+  type: "object",
+  properties: {
+    connections: { type: "integer" },
+    sessions:    { type: "array", items: { type: "string" } },
+  },
+})
+
 // ====================================================
 // 通用 Responses
 // ====================================================
@@ -397,6 +510,13 @@ export function generateOpenAPIDoc(router: Router): OpenAPIDocument {
       { name: "Audit", description: "审计日志" },
       { name: "License", description: "License 管理" },
       { name: "Users", description: "用户管理 (RBAC)" },
+      { name: "Roles", description: "角色管理 (RBAC)" },
+      { name: "Projects", description: "项目管理工作区" },
+      { name: "Tools", description: "工具管理" },
+      { name: "Skills", description: "Skill 管理" },
+      { name: "Workspace", description: "工作目录管理" },
+      { name: "Files", description: "文件浏览" },
+      { name: "Subscription", description: "订阅与配额" },
       { name: "Health", description: "健康检查" },
       { name: "WebSocket", description: "WebSocket 实时推送" },
     ],
@@ -436,8 +556,16 @@ function inferTag(pattern: string): string {
   if (pattern.includes("/audit")) return "Audit"
   if (pattern.includes("/license")) return "License"
   if (pattern.includes("/users")) return "Users"
+  if (pattern.includes("/roles")) return "Roles"
+  if (pattern.includes("/projects")) return "Projects"
+  if (pattern.includes("/tools")) return "Tools"
+  if (pattern.includes("/skills")) return "Skills"
+  if (pattern.includes("/workspace")) return "Workspace"
+  if (pattern.includes("/files")) return "Files"
+  if (pattern.includes("/subscription")) return "Subscription"
   if (pattern.includes("/health") || pattern.includes("/ready")) return "Health"
   if (pattern.includes("/ws")) return "WebSocket"
+  if (pattern.includes("/openapi") || pattern.includes("/docs")) return "System"
   return "System"
 }
 
@@ -709,6 +837,180 @@ function matchKnownRoute(method: string, pattern: string): Partial<OpenAPIOperat
       responses: {
         "101": { description: "协议升级为 WebSocket" },
       },
+    },
+
+    // ── Tools 管理 ──
+    "GET /api/tools": {
+      summary: "列出所有工具",
+      tags: ["Tools"],
+      responses: { "200": { description: "工具列表", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean" }, data: { type: "array", items: ref("ToolInfo") } } } } } } },
+    },
+    "POST /api/tools/reload": {
+      summary: "重载全部工具",
+      description: "清空注册表并重新扫描 tools/ 目录下所有 Tool，返回重载统计信息",
+      tags: ["Tools"],
+    },
+    "POST /api/tools/user": {
+      summary: "添加用户工具",
+      description: "将指定文件夹复制到 tools/user/ 目录下注册为工具",
+      requestBody: jsonBody({ type: "object", properties: { path: { type: "string", description: "包含 TOOL.md 的文件夹路径" } }, required: ["path"] }),
+      tags: ["Tools"],
+    },
+    "DELETE /api/tools/user/:name": {
+      summary: "删除用户工具",
+      parameters: [p("name", "工具名称")],
+      description: "删除 tools/user/ 下的工具文件夹",
+      tags: ["Tools"],
+    },
+
+    // ── Skills 管理 ──
+    "GET /api/skills": {
+      summary: "列出所有 Skill",
+      tags: ["Skills"],
+      responses: { "200": { description: "Skill 列表", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean" }, data: { type: "array", items: ref("SkillInfo") } } } } } } },
+    },
+    "POST /api/skills/reload": {
+      summary: "重载全部 Skill",
+      description: "清空注册表并重新扫描 skills/ 目录下所有 Skill，返回重载统计信息",
+      tags: ["Skills"],
+    },
+    "POST /api/skills/user": {
+      summary: "添加用户 Skill",
+      description: "将指定文件夹复制到 skills/user/ 目录下注册为 Skill",
+      requestBody: jsonBody({ type: "object", properties: { path: { type: "string", description: "包含 SKILL.md 的文件夹路径" } }, required: ["path"] }),
+      tags: ["Skills"],
+    },
+    "DELETE /api/skills/user/:name": {
+      summary: "删除用户 Skill",
+      parameters: [p("name", "Skill 名称")],
+      description: "删除 skills/user/ 下的 Skill 文件夹",
+      tags: ["Skills"],
+    },
+
+    // ── Workspace ──
+    "GET /api/workspace": {
+      summary: "获取默认工作目录",
+      tags: ["Workspace"],
+    },
+    "GET /api/sessions/:id/workspace": {
+      summary: "获取会话工作目录",
+      parameters: [p("id", "会话 ID")],
+      tags: ["Workspace"],
+    },
+    "PUT /api/sessions/:id/workspace": {
+      summary: "设置会话工作目录",
+      parameters: [p("id", "会话 ID")],
+      requestBody: jsonBody({ type: "object", properties: { workspace: { type: "string", description: "绝对路径" } }, required: ["workspace"] }),
+      tags: ["Workspace"],
+    },
+    "POST /api/workspace/browse": {
+      summary: "打开原生文件夹选择器",
+      description: "根据当前操作系统弹出文件夹选择对话框，返回所选路径（需要认证）",
+      tags: ["Workspace"],
+    },
+
+    // ── 文件浏览 ──
+    "GET /api/files/list": {
+      summary: "列出目录内容",
+      parameters: [
+        q("dir", "目录路径（绝对路径）", "string"),
+        q("sessionId", "会话 ID（用于获取该会话的工作目录）"),
+      ],
+      tags: ["Files"],
+    },
+    "GET /api/files/content": {
+      summary: "读取文件内容",
+      description: "读取指定文件内容（最大 500KB），返回内容和语法高亮语言",
+      parameters: [
+        q("path", "文件绝对路径"),
+        q("sessionId", "会话 ID"),
+      ],
+      tags: ["Files"],
+    },
+
+    // ── 项目管理 ──
+    "GET /api/projects": {
+      summary: "列出所有项目",
+      tags: ["Projects"],
+      responses: { "200": { description: "项目列表", content: { "application/json": { schema: { type: "object", properties: { success: { type: "boolean" }, data: { type: "array", items: ref("ProjectInfo") } } } } } } },
+    },
+    "POST /api/projects": {
+      summary: "创建项目",
+      requestBody: jsonBody({ type: "object", properties: { path: { type: "string", description: "项目目录绝对路径（名称自动取文件夹名）" } }, required: ["path"] }),
+      tags: ["Projects"],
+    },
+    "GET /api/projects/:id": {
+      summary: "获取项目详情",
+      parameters: [p("id", "项目 ID")],
+      tags: ["Projects"],
+    },
+    "PUT /api/projects/:id": {
+      summary: "更新项目",
+      parameters: [p("id", "项目 ID")],
+      requestBody: jsonBody({ type: "object", properties: { name: { type: "string" }, path: { type: "string" } } }),
+      tags: ["Projects"],
+    },
+    "DELETE /api/projects/:id": {
+      summary: "删除项目",
+      parameters: [p("id", "项目 ID")],
+      description: "级联删除所有关联会话，默认项目不可删除",
+      tags: ["Projects"],
+    },
+    "POST /api/projects/:id/activate": {
+      summary: "激活项目",
+      parameters: [p("id", "项目 ID")],
+      description: "更新项目的 lastActivatedAt 时间戳",
+      tags: ["Projects"],
+    },
+
+    // ── Subscription ──
+    "GET /api/subscription/tiers": {
+      summary: "列出所有订阅等级",
+      tags: ["Subscription"],
+    },
+    "GET /api/subscription/quota": {
+      summary: "获取当前配额使用情况",
+      tags: ["Subscription"],
+    },
+    "GET /api/subscription/users/:userId/tier": {
+      summary: "获取用户订阅等级",
+      parameters: [p("userId", "用户 ID")],
+      tags: ["Subscription"],
+    },
+    "PUT /api/subscription/users/:userId/tier": {
+      summary: "设置用户订阅等级",
+      parameters: [p("userId", "用户 ID")],
+      requestBody: jsonBody({ type: "object", properties: { tier: { type: "string", description: "free / pro / enterprise" } }, required: ["tier"] }),
+      tags: ["Subscription"],
+    },
+    "PUT /api/subscription/me/tier": {
+      summary: "切换当前用户的订阅等级",
+      description: "开发模式/测试用，切换到不同等级以体验功能差异",
+      requestBody: jsonBody({ type: "object", properties: { tier: { type: "string" } }, required: ["tier"] }),
+      tags: ["Subscription"],
+    },
+
+    // ── RBAC 角色 ──
+    "GET /api/roles": {
+      summary: "列出所有角色",
+      tags: ["Roles"],
+    },
+
+    // ── API 元数据 ──
+    "GET /api/openapi.json": {
+      summary: "OpenAPI 3.0 规范文档",
+      description: "返回本应用的 OpenAPI 3.0.3 JSON 文档",
+      tags: ["System"],
+      responses: { "200": { description: "OpenAPI JSON 文档", content: { "application/json": { schema: { type: "object" } } } } },
+    },
+    "GET /api/docs": {
+      summary: "API 文档页面 (Swagger UI)",
+      tags: ["System"],
+      responses: { "200": { description: "HTML 文档页面", content: { "text/html": { schema: { type: "string" } } } } },
+    },
+    "GET /api/ws/stats": {
+      summary: "WebSocket 连接统计",
+      tags: ["WebSocket"],
     },
   }
 

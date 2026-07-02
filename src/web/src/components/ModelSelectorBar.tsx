@@ -115,15 +115,15 @@ export function ModelSelectorBar() {
                 </Select.IndicatorGroup>
               </Select.Control>
               <Select.Positioner>
-                <Select.Content bg="gray.750" borderColor="gray.600" shadow="lg">
+                <Select.Content bg="gray.700" borderColor="gray.600" shadow="dark-lg">
                   {providerCollection.items.map((item) => (
                     <Select.Item
                       key={item.value}
                       item={item}
-                      color="gray.200"
+                      color="gray.100"
                       fontSize="xs"
-                      _highlighted={{ bg: "gray.700", color: "white" }}
-                      _selected={{ bg: "blue.800", color: "blue.200" }}
+                      _highlighted={{ bg: "gray.600", color: "white" }}
+                      _selected={{ bg: "blue.700", color: "blue.100" }}
                     >
                       {item.label}
                     </Select.Item>

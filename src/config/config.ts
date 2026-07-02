@@ -154,35 +154,7 @@ const loadConfig = Effect.gen(function* () {
   }
 
   // 2. 环境变量覆盖（优先级高于配置文件）
-  // Provider 覆盖
-  const envProvider = yield* env.get("TRY_PROVIDER")
-  if (envProvider) {
-    fileConfig.model = {
-      ...(fileConfig.model ?? DEFAULT_CONFIG.model),
-      provider: envProvider as AppConfig["model"]["provider"],
-    }
-  }
-
-  // Model 覆盖
-  const envModel = yield* env.get("TRY_MODEL")
-  if (envModel) {
-    fileConfig.model = {
-      ...(fileConfig.model ?? DEFAULT_CONFIG.model),
-      model: envModel,
-    }
-  }
-
-  // Temperature 覆盖
-  const envTemp = yield* env.get("TRY_TEMPERATURE")
-  if (envTemp) {
-    const temp = parseFloat(envTemp)
-    if (!isNaN(temp)) {
-      fileConfig.model = {
-        ...(fileConfig.model ?? DEFAULT_CONFIG.model),
-        temperature: temp,
-      }
-    }
-  }
+  // 注：Provider / Model / Temperature 不通过环境变量覆盖，统一在 try.json 管理
 
   // Workspace 根目录覆盖
   const envWorkspace = yield* env.get("TRY_WORKSPACE")

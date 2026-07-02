@@ -253,13 +253,13 @@ export function ToolSkillManager({ refreshKey }: Props) {
         <Portal>
           <Dialog.Backdrop />
           <Dialog.Positioner>
-            <Dialog.Content bg="gray.850" borderColor="gray.700" p={5}>
+            <Dialog.Content bg="gray.800" borderColor="gray.600" borderWidth="1px" p={5} boxShadow="dark-lg">
               <Dialog.Header>
-                <Dialog.Title color="gray.200">添加{itemLabel}</Dialog.Title>
+                <Dialog.Title color="gray.100">添加{itemLabel}</Dialog.Title>
               </Dialog.Header>
               <Dialog.Body>
                 <VStack align="stretch" gap={3}>
-                  <Text fontSize="sm" color="gray.400">
+                  <Text fontSize="sm" color="gray.300">
                     输入包含 TOOL.md / SKILL.md 的文件夹路径，系统会将整个文件夹复制到 {itemLabel.toLowerCase()}s/user/ 目录下。
                   </Text>
                   <Box>

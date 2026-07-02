@@ -12,15 +12,8 @@ services:
       - "${TRY_PORT:-3456}:3456"
     environment:
       - TRY_LOG_LEVEL=${TRY_LOG_LEVEL:-info}
-      # LLM API Keys（也可通过 auth.json 配置）
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-}
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      # 正式部署时建议关闭开发模式
+      # - TRY_DEV_MODE=${TRY_DEV_MODE:-false}
     volumes:
       # 配置文件（挂载到宿主机，方便修改）
       - ./try.json:/app/try.json

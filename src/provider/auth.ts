@@ -1,7 +1,6 @@
 // src/provider/auth.ts
 import { Context, Effect, Layer, Option } from "effect"
 import { Config } from "../config/config.js"
-import { Env } from "../infra/env.js"
 import { Fs } from "../infra/fs-util.js"
 import { logger } from "../infra/logger.js"
 
@@ -92,11 +91,10 @@ const parseJSON = <T>(content: string, filePath: string): Effect.Effect<T, Error
 
 const loadAuthConfig = Effect.gen(function* () {
   const fs = yield* Fs
-  const env = yield* Env
   
   let authConfig: AuthConfig = { ...DEFAULT_AUTH_CONFIG }
   
-  // 1. 尝试从 auth.json 加载
+  // 从 auth.json 加载
   const configPathOption = yield* findAuthConfigPath()
   
   if (Option.isSome(configPathOption)) {
@@ -106,74 +104,11 @@ const loadAuthConfig = Effect.gen(function* () {
     authConfig = { ...authConfig, ...fileConfig }
     logger.info(`加载认证配置: ${path}`)
   } else {
-    logger.info("未找到 auth.json，将使用环境变量")
+    logger.info("未找到 auth.json，使用默认配置")
   }
-  
-  // 2. 环境变量覆盖（优先级更高）
-  // 各 provider 的 API Key 环境变量会覆盖 auth.json 中的值
-  const openaiKey = yield* env.get("OPENAI_API_KEY")
-  if (openaiKey) {
-    authConfig.providers.openai = {
-      ...authConfig.providers.openai,
-      apiKey: openaiKey
-    }
-  }
-  
-  const anthropicKey = yield* env.get("ANTHROPIC_API_KEY")
-  if (anthropicKey) {
-    authConfig.providers.anthropic = {
-      ...authConfig.providers.anthropic,
-      apiKey: anthropicKey
-    }
-  }
-  
-  const deepseekKey = yield* env.get("DEEPSEEK_API_KEY")
-  if (deepseekKey) {
-    authConfig.providers.deepseek = {
-      ...authConfig.providers.deepseek,
-      apiKey: deepseekKey
-    }
-  }
-  
-  // 各 provider 的 Base URL 环境变量覆盖
-  const openaiBaseUrl = yield* env.get("OPENAI_BASE_URL")
-  if (openaiBaseUrl) {
-    authConfig.providers.openai = {
-      ...authConfig.providers.openai,
-      baseUrl: openaiBaseUrl,
-      apiKey: authConfig.providers.openai?.apiKey ?? "",
-    }
-  }
-  
-  const anthropicBaseUrl = yield* env.get("ANTHROPIC_BASE_URL")
-  if (anthropicBaseUrl) {
-    authConfig.providers.anthropic = {
-      ...authConfig.providers.anthropic,
-      baseUrl: anthropicBaseUrl,
-      apiKey: authConfig.providers.anthropic?.apiKey ?? "",
-    }
-  }
-  
-  const deepseekBaseUrl = yield* env.get("DEEPSEEK_BASE_URL")
-  if (deepseekBaseUrl) {
-    authConfig.providers.deepseek = {
-      ...authConfig.providers.deepseek,
-      baseUrl: deepseekBaseUrl,
-      apiKey: authConfig.providers.deepseek?.apiKey ?? "",
-    }
-  }
-  
-  // Ollama 环境变量覆盖（默认 baseURL: http://localhost:11434/v1）
-  const ollamaKey = yield* env.get("OLLAMA_API_KEY")
-  const ollamaBaseUrl = yield* env.get("OLLAMA_BASE_URL")
-  if (ollamaKey || ollamaBaseUrl) {
-    authConfig.providers.ollama = {
-      ...authConfig.providers.ollama,
-      apiKey: ollamaKey ?? authConfig.providers.ollama?.apiKey ?? "ollama",
-      baseUrl: ollamaBaseUrl ?? authConfig.providers.ollama?.baseUrl ?? "http://localhost:11434/v1",
-    }
-  } else if (!authConfig.providers.ollama) {
-    // 确保 Ollama 有默认配置
+
+  // Ollama 默认值（无需 auth.json 也能用本地模型）
+  if (!authConfig.providers.ollama) {
     authConfig.providers.ollama = {
       apiKey: "ollama",
       baseUrl: "http://localhost:11434/v1",
@@ -225,7 +160,7 @@ export const AuthLive = Layer.effect(
         
         if (!providerConfig.apiKey) {
           return yield* Effect.fail(
-            new Error(`Missing API key for ${targetProvider}. Set in auth.json or .env`)
+            new Error(`Missing API key for ${targetProvider}. Set in auth.json`)
           )
         }
         
