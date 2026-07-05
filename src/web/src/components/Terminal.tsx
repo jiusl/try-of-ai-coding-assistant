@@ -1,6 +1,8 @@
 // src/web/src/components/Terminal.tsx
 // ====================================================
 // Web 终端面板 — 基于 xterm.js + WebSocket PTY
+// 前端本地回显模式：由于 Windows 管道模式下 shell 无法正确处理终端控制序列，
+// 前端完全接管输入显示，只将最终完整命令行发送给 shell。
 // ====================================================
 
 import { useEffect, useRef, useCallback, useState } from "react"
@@ -29,6 +31,8 @@ export function TerminalPanel({ sessionId, workspace, height, onResize, onClose 
   const [status, setStatus] = useState<"connecting" | "connected" | "closed">("connecting")
   const resizingRef = useRef(false)
   const startYRef = useRef(0)
+  /** 当前命令行缓冲区，用于本地回显并追踪用户实际输入 */
+  const lineBufRef = useRef<string>("")
 
   // ── 拖拽调整高度 ──
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -103,8 +107,65 @@ export function TerminalPanel({ sessionId, workspace, height, onResize, onClose 
     ws.onclose = () => setStatus("closed")
     ws.onerror = () => setStatus("closed")
 
+    // ── 本地回显模式 ──
+    // Windows 管道模式 shell 无法正确处理终端控制序列 (Backspace/光标移动等)，
+    // 因此前端完全接管输入回显，仅将最终完整命令发送给 shell。
     term.onData((data: string) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState !== WebSocket.OPEN) return
+
+      if (data === "\r") {
+        // Enter: 发送当前命令行给 shell（附带 \r\n 以触发执行）
+        // 本地写 \r\n 换行，后端会跳过 shell 的回显，只转发命令输出
+        const cleanCmd = lineBufRef.current + "\r\n"
+        ws.send(new TextEncoder().encode(cleanCmd))
+        term.write("\r\n")
+        lineBufRef.current = ""
+      } else if (data === "\x7f" || data === "\b") {
+        // Backspace: 本地删除
+        if (lineBufRef.current.length > 0) {
+          lineBufRef.current = lineBufRef.current.slice(0, -1)
+          term.write("\b \b")
+        }
+      } else if (data === "\x03") {
+        // Ctrl+C: 有选区 → 复制到剪贴板；无选区 → 发送中断信号
+        if (term.hasSelection()) {
+          const sel = term.getSelection()
+          if (sel) {
+            navigator.clipboard.writeText(sel).catch(() => {
+              // 回退：用 textarea fallback
+              const ta = document.createElement("textarea")
+              ta.value = sel
+              ta.style.position = "fixed"
+              ta.style.left = "-9999px"
+              document.body.appendChild(ta)
+              ta.select()
+              document.execCommand("copy")
+              document.body.removeChild(ta)
+            })
+          }
+        } else {
+          ws.send(new TextEncoder().encode("\x03"))
+          lineBufRef.current = ""
+        }
+      } else if (data === "\x16") {
+        // Ctrl+V: 从剪贴板粘贴
+        navigator.clipboard.readText().then(text => {
+          if (text && ws.readyState === WebSocket.OPEN) {
+            lineBufRef.current += text
+            term.write(text)
+          }
+        }).catch(() => { /* 剪贴板不可读 */ })
+      } else if (data === "\t") {
+        // Tab: 传给 shell 处理补全
+        ws.send(new TextEncoder().encode("\t"))
+        lineBufRef.current += "\t"
+      } else if (data >= " ") {
+        // 可打印字符：本地回显并记录到命令行缓冲
+        lineBufRef.current += data
+        term.write(data)
+      }
+      // 其他控制字符 (ESC, arrows 等) 直接转发，不做本地回显
+      else {
         ws.send(new TextEncoder().encode(data))
       }
     })

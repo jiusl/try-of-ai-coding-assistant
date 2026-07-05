@@ -14,6 +14,8 @@ interface TerminalSession {
   clientId: string
   ws: ServerWebSocket<unknown>
   proc: Subprocess | null
+  /** 是否需要跳过 stdout 中 shell 回显的命令行 */
+  skipEcho: boolean
 }
 
 export class TerminalManager {
@@ -38,15 +40,17 @@ export class TerminalManager {
       }
     } catch { /* 使用默认路径 */ }
 
-    const shellKey = process.platform === "win32" ? "cmd.exe" : "bash"
+    // Windows 使用 PowerShell（管道模式下交互体验更好），Linux/macOS 使用 bash
+    const shellKey = process.platform === "win32" ? "powershell.exe" : "bash"
+    const shellArgs = process.platform === "win32" ? ["-NoLogo", "-NoExit"] : []
 
-    const proc = Bun.spawn([shellKey], {
+    const proc = Bun.spawn([shellKey, ...shellArgs], {
       cwd: workspace,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, TERM: "xterm-256color" },
     })
 
-    const session: TerminalSession = { clientId, ws, proc }
+    const session: TerminalSession = { clientId, ws, proc, skipEcho: false }
     this.sessions.set(clientId, session)
 
     // 发送初始提示（路径 + 换行）
@@ -55,13 +59,27 @@ export class TerminalManager {
     )
     try { ws.send(banner) } catch { /* ignore */ }
 
-    // ── stdout → WS ──
+    // ── stdout → WS（带 echo 抑制）──
+    // 前端本地回显 + shell stdout 回显 = 双重显示。
+    // 收到完整命令后跳过 shell 回显的命令行，只转发实际输出。
     const stdoutReader = proc.stdout.getReader()
     const readStdout = async () => {
       try {
         while (true) {
           const { done, value } = await stdoutReader.read()
           if (done) break
+          if (session.skipEcho && value && value.length > 0) {
+            const nl = value.indexOf(10) // LF
+            if (nl >= 0) {
+              session.skipEcho = false
+              const rest = value.subarray(nl + 1)
+              if (rest.length > 0) {
+                try { ws.send(rest) } catch { break }
+              }
+            }
+            // 没找到换行 → 整块都是回显，全部跳过
+            continue
+          }
           try { ws.send(value) } catch { break }
         }
       } catch { /* 连接已关闭 */ }
@@ -94,7 +112,7 @@ export class TerminalManager {
   }
 
   /** 将客户端输入写入 shell stdin */
-  handleMessage(ws: ServerWebSocket<unknown>, message: string | Buffer): void {
+  async handleMessage(ws: ServerWebSocket<unknown>, message: string | Buffer): Promise<void> {
     const clientId = this.findClientId(ws)
     if (!clientId) return
     const session = this.sessions.get(clientId)
@@ -106,7 +124,12 @@ export class TerminalManager {
       : message
 
     try {
-      ;(session.proc.stdin as any).write(data)
+      await session.proc.stdin.write(data)
+      // 检测是否为完整命令行（以 \r\n 结尾）→ 标记跳过 shell 回显
+      if (data.length >= 2 &&
+          data[data.length - 2] === 13 && data[data.length - 1] === 10) {
+        session.skipEcho = true
+      }
     } catch { /* 进程可能已退出 */ }
   }
 
